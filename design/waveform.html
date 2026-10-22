@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waveform options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #F2F2F2; --ink: #0E0E0F; --muted: #6B6B70; --rule: #DADADD; --card: #FFFFFF;
+  --stage: #050506; --hud: #0B0B0C; --hud-edge: rgba(255,255,255,0.09); --hud-ink: rgba(255,255,255,0.86); --hud-muted: rgba(255,255,255,0.5);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page: #0A0A0B; --ink: #EDEDEF; --muted: #8B8B92; --rule: #232326; --card: #121214; }
+}
+:root[data-theme="dark"] { --page: #0A0A0B; --ink: #EDEDEF; --muted: #8B8B92; --rule: #232326; --card: #121214; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+main { max-width: 1040px; margin: 0 auto; padding: 48px 16px 80px; }
+h1 { font: 600 34px/1.1 var(--sans); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font: 600 19px/1.2 var(--sans); letter-spacing: -0.01em; margin: 0; }
+p { margin: 0; text-wrap: pretty; max-width: 62ch; }
+.lede { color: var(--muted); margin-top: 10px; }
+.controls { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 0; margin-top: 20px; background: var(--page); border-bottom: 1px solid var(--rule); }
+button { font: 500 13px var(--sans); border-radius: 8px; padding: 7px 14px; border: 1px solid var(--rule); background: var(--card); color: var(--ink); cursor: pointer; transition: transform 120ms ease-out, background-color 120ms ease-out; }
+button:active { transform: scale(0.96); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+button.primary { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.src { font-size: 13px; color: var(--muted); }
+label.sens { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-left: auto; }
+input[type=range] { accent-color: var(--ink); width: 120px; }
+.meter { width: 64px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ink); }
+
+.opt { margin-top: 44px; }
+.opt header { display: flex; gap: 14px; align-items: baseline; margin-bottom: 12px; flex-wrap: wrap; }
+.opt header .k { font: 500 13px var(--mono); color: var(--muted); }
+.opt header p { color: var(--muted); font-size: 14px; }
+.stage { position: relative; background: var(--stage); border-radius: 14px; overflow: hidden; }
+.stage canvas.big { display: block; width: 100%; height: 220px; }
+.dock { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+.dock span { font-size: 12px; color: rgba(255,255,255,0.4); }
+.pill { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 16px 0 14px; border-radius: 20px; background: var(--hud); box-shadow: 0 0 0 0.5px var(--hud-edge) inset, 0 8px 24px rgba(0,0,0,0.5); }
+.pill canvas { display: block; width: 132px; height: 26px; }
+.pill time { font: 500 12px var(--mono); font-variant-numeric: tabular-nums; color: var(--hud-muted); min-width: 30px; text-align: right; }
+.cap { margin-top: 8px; font-size: 12px; color: var(--muted); }
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+@media (max-width: 600px) { .stage canvas.big { height: 150px; } label.sens { margin-left: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Waveform: pick one</h1>
+  <p class="lede">Four monochrome styles, each live. Turn on your mic and talk: they follow your volume, go still when you pause, and settle to a thin breathing line in silence. The pill under each one is the real widget size: waveform and timer, nothing else.</p>
+
+  <div class="controls">
+    <button class="primary" id="micBtn">Use my microphone</button>
+    <span class="src" id="src">Playing a simulated voice</span>
+    <span class="meter" aria-hidden="true"><i id="lvl"></i></span>
+    <label class="sens">Sensitivity <input type="range" id="sens" min="0.5" max="2.5" step="0.05" value="1.2"></label>
+  </div>
+
+  <section class="opt" data-v="ribbons">
+    <header><span class="k">A</span><h2>Ribbons</h2><p>Layered see-through bands that twist as you talk, like your first reference, in white only.</p></header>
+    <div class="stage"><canvas class="big"></canvas><div class="dock"><div class="pill"><canvas class="mini"></canvas><time>0:00</time></div><span>Actual size</span></div></div>
+  </section>
+
+  <section class="opt" data-v="lattice">
+    <header><span class="k">B</span><h2>Lattice</h2><p>The same bands drawn as fine vertical lines with points at the edges, like your second reference. Busiest of the four.</p></header>
+    <div class="stage"><canvas class="big"></canvas><div class="dock"><div class="pill"><canvas class="mini"></canvas><time>0:00</time></div><span>Actual size</span></div></div>
+  </section>
+
+  <section class="opt" data-v="strands">
+    <header><span class="k">C</span><h2>Strands</h2><p>Six hairline waves that fan apart with your voice and pinch together at the ends. The thinnest and calmest.</p></header>
+    <div class="stage"><canvas class="big"></canvas><div class="dock"><div class="pill"><canvas class="mini"></canvas><time>0:00</time></div><span>Actual size</span></div></div>
+  </section>
+
+  <section class="opt" data-v="comb">
+    <header><span class="k">D</span><h2>Comb</h2><p>Hairline vertical lines under a ribbon glow: the vertical lines you asked for, carrying the ribbon's shape.</p></header>
+    <div class="stage"><canvas class="big"></canvas><div class="dock"><div class="pill"><canvas class="mini"></canvas><time>0:00</time></div><span>Actual size</span></div></div>
+  </section>
+
+  <footer>Prototype in the browser. The app draws the chosen style natively on the Mac, using the same maths, from the microphone level it already measures for transcription. Your audio stays in this page; nothing is recorded or sent.</footer>
+</main>
+
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const S = { level: 0, bands: [0, 0, 0, 0], phase: 0, t: 0 };
+  let analyser = null, td = null, fd = null, sampleRate = 48000;
+  let sens = 1.2;
+  const sensEl = document.getElementById('sens');
+  sensEl.addEventListener('input', () => { sens = +sensEl.value; });
+
+  // ---- Simulated speech: phrases of syllables with pauses between ----
+  const sim = { talking: true, until: 2.5, next: 0, start: 0, dur: 0.2, amp: 0, b: [0.5, 0.5, 0.5, 0.5] };
+  function simulate(t) {
+    if (t > sim.until) { sim.talking = !sim.talking; sim.until = t + (sim.talking ? 1.4 + Math.random() * 2.6 : 0.35 + Math.random() * 1.0); }
+    if (!sim.talking) return [0.01 * Math.random(), [0.1, 0.1, 0.1, 0.1]];
+    if (t > sim.next) {
+      sim.start = t; sim.dur = 0.1 + Math.random() * 0.2; sim.next = t + sim.dur + Math.random() * 0.07;
+      sim.amp = 0.3 + Math.random() * 0.6; sim.b = sim.b.map(() => 0.2 + Math.random() * 0.8);
+    }
+    const p = (t - sim.start) / sim.dur;
+    const a = p < 1 ? sim.amp * Math.pow(Math.sin(Math.PI * p), 0.8) : 0.04;
+    return [a, sim.b];
+  }
+
+  // ---- Microphone ----
+  const micBtn = document.getElementById('micBtn'), srcEl = document.getElementById('src');
+  micBtn.addEventListener('click', async () => {
+    if (analyser) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false } });
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      sampleRate = ac.sampleRate;
+      analyser = ac.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.5;
+      ac.createMediaStreamSource(stream).connect(analyser);
+      td = new Float32Array(analyser.fftSize); fd = new Uint8Array(analyser.frequencyBinCount);
+      micBtn.textContent = 'Microphone on'; micBtn.classList.remove('primary');
+      srcEl.textContent = 'Listening to you';
+    } catch (e) {
+      srcEl.textContent = 'No microphone access, still simulating. Open this file in Chrome or Safari to allow it.';
+    }
+  });
+  const BANDS = [[100, 300], [300, 900], [900, 2500], [2500, 6000]];
+  function readMic() {
+    analyser.getFloatTimeDomainData(td);
+    let sum = 0; for (let i = 0; i < td.length; i++) sum += td[i] * td[i];
+    const rms = Math.sqrt(sum / td.length);
+    const db = 20 * Math.log10(rms + 1e-7);
+    const lvl = Math.min(1, Math.max(0, (db + 58) / 42));
+    analyser.getByteFrequencyData(fd);
+    const hz = sampleRate / analyser.fftSize;
+    const b = BANDS.map(([lo, hi]) => {
+      let s = 0, n = 0; for (let i = Math.floor(lo / hz); i <= Math.min(fd.length - 1, Math.ceil(hi / hz)); i++) { s += fd[i]; n++; }
+      return Math.min(1, (s / Math.max(1, n)) / 170);
+    });
+    return [lvl, b];
+  }
+
+  // ---- Shared shape maths ----
+  // taper: pinches every wave to nothing at both ends
+  const taper = x => Math.pow(Math.max(0, 1 - x * x), 2.2);
+  const RIB = [
+    { c: -0.38, w: 0.30, f: 2.3, sp: 1.00, a: 1.00, al: 0.20, b: 0, tw: 0.9 },
+    { c: 0.06,  w: 0.40, f: 3.2, sp: 1.35, a: 0.85, al: 0.17, b: 1, tw: 1.3 },
+    { c: 0.42,  w: 0.28, f: 4.1, sp: 1.70, a: 0.75, al: 0.15, b: 2, tw: 0.7 },
+    { c: -0.08, w: 0.55, f: 1.7, sp: 0.75, a: 0.60, al: 0.12, b: 3, tw: 1.6 },
+    { c: 0.24,  w: 0.22, f: 5.3, sp: 2.10, a: 0.55, al: 0.12, b: 2, tw: 1.1 },
+  ];
+  const IDLE = 0.035;
+  function amp(r) { return IDLE + S.level * (1.0 + 0.7 * S.bands[r.b]); }
+  function ribY(r, x, extra) {
+    const drift = Math.sin(S.phase * 0.11 * r.sp + r.f) * 0.18;
+    const g = Math.exp(-((x - (r.c + drift)) ** 2) / (2 * r.w * r.w));
+    return g * taper(x) * Math.sin(r.f * Math.PI * x - S.phase * r.sp + extra) * r.a * amp(r);
+  }
+
+  function setup(canvas) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    return [ctx, w, h];
+  }
+  function coreLine(ctx, w, h, mid, alpha, width) {
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, `rgba(255,255,255,${alpha})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = width; ctx.beginPath();
+    const step = Math.max(2, w / 160);
+    for (let px = 0; px <= w; px += step) {
+      const x = px / w * 2 - 1;
+      let y = 0; for (const r of RIB) y += ribY(r, x, 0) * 0.12;
+      px === 0 ? ctx.moveTo(px, mid - y * h * 0.45) : ctx.lineTo(px, mid - y * h * 0.45);
+    }
+    ctx.stroke();
+  }
+
+  const DRAW = {
+    ribbons(ctx, w, h, mini) {
+      const mid = h / 2, H = h * 0.45, step = Math.max(2, w / 180);
+      for (const r of RIB) {
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += step) { const x = px / w * 2 - 1; const y = mid - ribY(r, x, 0) * H; px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y); }
+        for (let px = w; px >= 0; px -= step) { const x = px / w * 2 - 1; ctx.lineTo(px, mid - ribY(r, x, r.tw) * H * 0.75); }
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,255,255,${r.al * (mini ? 1.4 : 1)})`; ctx.fill();
+        ctx.strokeStyle = `rgba(255,255,255,${r.al * 1.6})`; ctx.lineWidth = mini ? 0.6 : 0.8; ctx.stroke();
+      }
+      coreLine(ctx, w, h, mid, 0.95, mini ? 1 : 1.4);
+    },
+    lattice(ctx, w, h, mini) {
+      const mid = h / 2, H = h * 0.45, gap = mini ? 2.5 : 4;
+      for (const r of RIB.slice(0, 4)) {
+        ctx.strokeStyle = `rgba(255,255,255,${r.al * 1.7})`; ctx.fillStyle = `rgba(255,255,255,${Math.min(1, r.al * 4)})`;
+        ctx.lineWidth = mini ? 0.5 : 0.7;
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += gap) {
+          const x = px / w * 2 - 1;
+          const y1 = mid - ribY(r, x, 0) * H, y2 = mid - ribY(r, x, r.tw) * H * 0.75;
+          if (Math.abs(y1 - y2) < 0.4) continue;
+          ctx.moveTo(px, y1); ctx.lineTo(px, y2);
+        }
+        ctx.stroke();
+        if (!mini) for (let px = 0; px <= w; px += gap * 2) {
+          const x = px / w * 2 - 1; const y1 = mid - ribY(r, x, 0) * H;
+          ctx.beginPath(); ctx.arc(px, y1, 0.9, 0, 6.283); ctx.fill();
+        }
+      }
+      // particle axis
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      for (let px = 0; px <= w; px += mini ? 3 : 5) {
+        const x = px / w * 2 - 1, j = Math.sin(px * 12.9898 + S.phase * 3) * 0.5 * (1 + S.level * 3);
+        ctx.globalAlpha = taper(x) * 0.9 + 0.1; ctx.fillRect(px, mid + j, 1, 1);
+      }
+      ctx.globalAlpha = 1;
+      coreLine(ctx, w, h, mid, 0.8, mini ? 0.8 : 1);
+    },
+    strands(ctx, w, h, mini) {
+      const mid = h / 2, H = h * 0.42, step = Math.max(2, w / 200);
+      for (let i = 0; i < 6; i++) {
+        const f = 1.6 + i * 0.45, sp = 0.8 + i * 0.22, a = 1 - i * 0.11, band = i % 4;
+        ctx.strokeStyle = `rgba(255,255,255,${0.75 - i * 0.1})`; ctx.lineWidth = mini ? 0.7 : (i === 0 ? 1.4 : 0.9);
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += step) {
+          const x = px / w * 2 - 1;
+          const A = IDLE + S.level * (0.9 + 0.7 * S.bands[band]);
+          const y = mid - taper(x) * Math.sin(f * Math.PI * x - S.phase * sp + i * 0.7) * A * a * H;
+          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        }
+        ctx.stroke();
+      }
+    },
+    comb(ctx, w, h, mini) {
+      const mid = h / 2, H = h * 0.46, gap = mini ? 3 : 4;
+      // soft ribbon glow underneath
+      ctx.globalAlpha = 0.5; DRAW.ribbons(ctx, w, h, mini); ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = mini ? 0.8 : 1; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let px = gap / 2; px <= w; px += gap) {
+        const x = px / w * 2 - 1;
+        let e = 0; for (const r of RIB) e = Math.max(e, Math.abs(ribY(r, x, 0)));
+        const hh = Math.max(0.6, e * H);
+        ctx.moveTo(px, mid - hh); ctx.lineTo(px, mid + hh);
+      }
+      ctx.stroke();
+    },
+  };
+
+  const items = [...document.querySelectorAll('.opt')].map(sec => ({
+    v: sec.dataset.v, big: sec.querySelector('canvas.big'), mini: sec.querySelector('canvas.mini'), time: sec.querySelector('time'),
+  }));
+  const lvlEl = document.getElementById('lvl');
+  const t0 = performance.now(); let last = t0;
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; S.t += dt;
+    let [lvl, b] = analyser ? readMic() : simulate(S.t);
+    lvl = Math.min(1, lvl * sens);
+    // fast attack, slow release: rises with the voice, falls gently
+    const k = lvl > S.level ? 1 - Math.exp(-dt / 0.035) : 1 - Math.exp(-dt / 0.22);
+    S.level += (lvl - S.level) * k;
+    S.bands = S.bands.map((v, i) => v + (b[i] - v) * (1 - Math.exp(-dt / 0.12)));
+    S.phase += dt * (reduce ? 0.6 : (1.4 + S.level * 7));
+    lvlEl.style.width = (S.level * 100).toFixed(0) + '%';
+    const secs = Math.floor((now - t0) / 1000), stamp = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+    for (const it of items) {
+      let [c, w, h] = setup(it.big); DRAW[it.v](c, w, h, false);
+      [c, w, h] = setup(it.mini); DRAW[it.v](c, w, h, true);
+      it.time.textContent = stamp;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

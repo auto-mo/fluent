@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microphone mark</title>
+<style>
+:root {
+  --page: #F2F2F2; --ink: #0E0E0F; --muted: #6B6B70; --rule: #DADADD; --card: #FFFFFF; --bar: rgba(246,246,246,0.92);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page: #0A0A0B; --ink: #EDEDEF; --muted: #8B8B92; --rule: #232326; --card: #121214; --bar: rgba(30,30,32,0.92); }
+}
+:root[data-theme="dark"] { --page: #0A0A0B; --ink: #EDEDEF; --muted: #8B8B92; --rule: #232326; --card: #121214; --bar: rgba(30,30,32,0.92); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+main { max-width: 1040px; margin: 0 auto; padding: 48px 16px 80px; }
+h1 { font: 600 34px/1.1 var(--sans); letter-spacing: -0.02em; margin: 0; }
+h2 { font: 600 18px/1.2 var(--sans); margin: 0 0 8px; }
+p { margin: 0; text-wrap: pretty; max-width: 62ch; }
+.lede { color: var(--muted); margin-top: 10px; }
+.row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; margin-top: 32px; align-items: start; }
+.stage { position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #B7B7B9; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.stage .loading { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(0,0,0,.45); font-size: 13px; }
+.seg { display: inline-flex; background: rgba(128,128,134,.14); border-radius: 9px; padding: 2px; margin-top: 14px; }
+.seg button { font: 500 13px var(--sans); border: 0; background: transparent; color: var(--muted); padding: 5px 14px; border-radius: 7px; cursor: pointer; transition: transform 120ms ease-out; }
+.seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 0 0 0.5px var(--rule), 0 1px 2px rgba(0,0,0,.08); }
+.seg button:active { transform: scale(0.96); }
+.seg button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.note { color: var(--muted); font-size: 14px; }
+.note p + p { margin-top: 8px; }
+.note b { color: var(--ink); font-weight: 600; }
+.sizes { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.sizes figure { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+.sizes img { display: block; border-radius: 22.5%; box-shadow: 0 0 0 0.5px rgba(0,0,0,.12), 0 6px 14px rgba(0,0,0,.18); margin-bottom: 6px; background: #B7B7B9; }
+.menubar { display: flex; justify-content: flex-end; gap: 18px; align-items: center; height: 28px; padding: 0 14px; border-radius: 8px; background: var(--bar); box-shadow: 0 0 0 0.5px var(--rule); margin-top: 12px; font-size: 13px; max-width: 420px; }
+.menubar svg { width: 18px; height: 18px; color: var(--ink); }
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+@media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<main>
+  <h1>Fluent app icon</h1>
+  <p class="lede">The app icon as a real 3D model (three.js) with studio lighting: a tilted silver capsule mic with one red tally light on the collar. It turns slowly so you can judge the form. <code>window.exportIcon()</code> renders the 1024 px icon.</p>
+
+  <div class="row">
+    <div>
+      <div class="stage" id="stage"><span class="loading">Loading the 3D model…</span></div>
+      <div class="seg" role="group" aria-label="Finish">
+        <button class="on" data-theme-btn="clay">Clay</button>
+        <button data-theme-btn="black">Black</button>
+        <button data-theme-btn="steel">Steel</button>
+      </div>
+    </div>
+    <div class="note">
+      <h2>Where it goes</h2>
+      <p><b>Dock icon:</b> a still frame of this mic on its tile (sizes below). For the shipped icon it gets layered for macOS's glass icon format: background, mic, grille highlight.</p>
+      <p><b>Animated:</b> on the welcome screen and in About, where it turns slowly like this. It can also catch light in time with your voice the first time you test the mic.</p>
+      <p><b>Menu bar:</b> a flat outline mic, because macOS requires one-colour shapes there. It becomes a tiny comb waveform while recording.</p>
+      <h2 style="margin-top:24px">At real sizes</h2>
+      <div class="sizes" id="sizes">
+        <figure><img id="i128" width="128" height="128" alt="Icon at 128 pixels">128</figure>
+        <figure><img id="i64" width="64" height="64" alt="Icon at 64 pixels">64</figure>
+        <figure><img id="i32" width="32" height="32" alt="Icon at 32 pixels">32</figure>
+      </div>
+      <h2 style="margin-top:24px">Menu bar</h2>
+      <div class="menubar" aria-label="Menu bar mock">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="7.6" y="1.8" width="5.4" height="8.6" rx="2.7" transform="rotate(30 10.3 6.1)"/><path d="M8 10.8 6.3 15.6M3.6 15.8h5.6"/></svg>
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 9h.01M4 7.5v3M6 5v8M8 3.5v11M10 6v6M12 4.5v9M14 7v4M16 9h.01"/></svg>
+        <span>Wed 3:04 PM</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>Rotation stops if Reduce Motion is on.</footer>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const stage = document.getElementById('stage');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;
+stage.querySelector('.loading').remove();
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 50);
+camera.position.set(0, -0.35, 9.2);
+camera.lookAt(0, -0.45, 0);
+
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(-2, 7, 5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 14; key.shadow.blurSamples = 20; key.shadow.bias = -0.0005;
+Object.assign(key.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 0.5, far: 20 });
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xffffff, 0.9); rim.position.set(4, 2, -3); scene.add(rim);
+
+// Perforated grille texture: light lattice, dark square holes
+function grilleTexture(lattice, hole) {
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d'); g.fillStyle = lattice; g.fillRect(0, 0, 1024, 1024);
+  g.fillStyle = hole; const cell = 16, h = 11, o = (cell - h) / 2;
+  for (let y = 0; y < 1024; y += cell) for (let x = 0; x < 1024; x += cell) g.fillRect(x + o, y + o, h, h);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const THEMES = {
+  clay:  { bg: 0xB9B9BB, body: 0xEAE8E3, bodyRough: 0.82, bodyMetal: 0.0, lattice: '#A6A6AA', hole: '#141416', gRough: 0.5, gMetal: 0.35, shadow: 0.28, exposure: 1.0, env: 1 },
+  black: { bg: 0x060607, body: 0x1B1B1D, bodyRough: 0.45, bodyMetal: 0.2, lattice: '#8E8E94', hole: '#050505', gRough: 0.35, gMetal: 0.85, shadow: 0.6, exposure: 1.15, env: 1.4 },
+  steel: { bg: 0xD9DEE3, body: 0xC9CBCF, bodyRough: 0.22, bodyMetal: 1.0, lattice: '#C4C6CA', hole: '#1A1B1D', gRough: 0.25, gMetal: 1.0, shadow: 0.22, exposure: 1.05, env: 3.2 },
+};
+
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0xE4E4E6, roughness: 0.8 });
+const darkMat = new THREE.MeshStandardMaterial({ color: 0xC9CBCE, roughness: 0.32, metalness: 1.0 });
+const cableMat = new THREE.MeshStandardMaterial({ color: 0x38383B, roughness: 0.55 });
+const grilleMats = [new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial()];
+
+const R = 0.5;
+const mic = new THREE.Group();
+// grille: open cylinder + top dome, same texture density on both
+const gCyl = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.82, 128, 1, true), grilleMats[0]); gCyl.position.y = 0.53; mic.add(gCyl);
+const gCap = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 64, 0, Math.PI * 2, 0, Math.PI / 2), grilleMats[1]); gCap.position.y = 0.94; mic.add(gCap);
+// collar band, slightly proud of the body
+const collar = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.035, R + 0.035, 0.26, 128), bodyMat); mic.add(collar);
+// lower shell: short cylinder + rounded butt
+const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.4, 128), bodyMat); shell.position.y = -0.33; mic.add(shell);
+const butt = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 64, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), bodyMat); butt.position.y = -0.53; mic.add(butt);
+// pivot knob on the side facing us
+const knobMat = darkMat;
+const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.07, 64), knobMat); knob.rotation.x = Math.PI / 2; knob.position.z = R + 0.07; mic.add(knob);
+// tally light: the one spot of colour, the red "on air" lamp
+const ledAngle = -0.62, ledR = R + 0.036;
+const led = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.02, 40), new THREE.MeshStandardMaterial({ color: 0x3A0605, emissive: 0xFF2D20, emissiveIntensity: 2.2, roughness: 0.2 }));
+led.position.set(Math.sin(ledAngle) * ledR, 0.0, Math.cos(ledAngle) * ledR); led.rotation.set(Math.PI / 2, 0, -ledAngle, 'YXZ'); led.rotation.order = 'YXZ'; led.rotation.y = ledAngle; mic.add(led);
+const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gg = gc.getContext('2d');
+const glow = gg.createRadialGradient(64, 64, 0, 64, 64, 64); glow.addColorStop(0, 'rgba(255,60,40,0.55)'); glow.addColorStop(0.3, 'rgba(255,45,32,0.22)'); glow.addColorStop(1, 'rgba(255,45,32,0)');
+gg.fillStyle = glow; gg.fillRect(0, 0, 128, 128);
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.NormalBlending, depthWrite: false, transparent: true }));
+halo.scale.set(0.22, 0.22, 1); halo.position.copy(led.position).multiplyScalar(1.02); mic.add(halo);
+mic.rotation.z = -0.62;
+mic.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+const stand = new THREE.Group();
+const BASE_Y = -1.7, Z = R + 0.1;
+const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.5, 24), darkMat); rod.position.set(0, -0.78, Z); stand.add(rod);
+const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.13, 28), darkMat); nut.position.set(0, BASE_Y + 0.21, Z); stand.add(nut);
+const knurl = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.09, 36), new THREE.MeshStandardMaterial({ color: 0xDDDDDF, roughness: 0.7, flatShading: true }));
+knurl.position.set(0, BASE_Y + 0.1, Z); stand.add(knurl);
+const base = new THREE.Mesh(new THREE.LatheGeometry([
+  new THREE.Vector2(0, 0), new THREE.Vector2(1.02, 0), new THREE.Vector2(1.06, 0.025), new THREE.Vector2(1.05, 0.05),
+  new THREE.Vector2(0.55, 0.075), new THREE.Vector2(0.24, 0.1), new THREE.Vector2(0.2, 0.06), new THREE.Vector2(0, 0.06),
+], 128), bodyMat);
+base.position.set(0, BASE_Y, Z - 0.15); stand.add(base);
+// cable from the butt, looping down to the nut
+const tilt = mic.rotation.z, by = -1.0;
+const start = new THREE.Vector3(-by * Math.sin(tilt), by * Math.cos(tilt), 0.05);
+const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+  start, new THREE.Vector3(start.x - 0.12, start.y - 0.2, 0.12), new THREE.Vector3(-0.85, -1.25, 0.35),
+  new THREE.Vector3(-0.45, -1.42, 0.55), new THREE.Vector3(-0.12, -1.38, Z), new THREE.Vector3(0, BASE_Y + 0.27, Z),
+]), 96, 0.022, 16), cableMat);
+stand.add(cable);
+stand.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+const product = new THREE.Group(); product.add(mic, stand); product.position.y = 0.2; scene.add(product);
+const floorMat = new THREE.ShadowMaterial({ opacity: 0.28 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), floorMat); floor.rotation.x = -Math.PI / 2; floor.position.y = BASE_Y + 0.2; floor.receiveShadow = true; scene.add(floor);
+const cc = document.createElement('canvas'); cc.width = cc.height = 256; const cg = cc.getContext('2d');
+const rg = cg.createRadialGradient(128,128,0,128,128,128); rg.addColorStop(0,'rgba(0,0,0,0.55)'); rg.addColorStop(0.55,'rgba(0,0,0,0.25)'); rg.addColorStop(1,'rgba(0,0,0,0)');
+cg.fillStyle = rg; cg.fillRect(0,0,256,256);
+const contact = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 2.7), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cc), transparent: true, depthWrite: false }));
+contact.rotation.x = -Math.PI / 2; contact.position.set(0, BASE_Y + 0.205, Z - 0.15); scene.add(contact);
+
+function applyTheme(name) {
+  const t = THEMES[name];
+  scene.background = new THREE.Color(t.bg); stage.style.background = '#' + t.bg.toString(16).padStart(6, '0');
+  bodyMat.color.setHex(t.body); bodyMat.roughness = t.bodyRough; bodyMat.metalness = t.bodyMetal;
+  knurl.material.color.setHex(t.body); knurl.material.metalness = t.bodyMetal;
+  
+  const tex = grilleTexture(t.lattice, t.hole);
+  grilleMats.forEach((m, i) => {
+    const tx = tex.clone(); tx.needsUpdate = true;
+    tx.repeat.set(1.25, i === 0 ? 0.33 : 0.31);
+    m.map = tx; m.bumpMap = tx; m.bumpScale = 6; m.roughness = t.gRough; m.metalness = t.gMetal; m.needsUpdate = true;
+  });
+  [bodyMat, knurl.material, cableMat, ...grilleMats].forEach(m => { m.envMapIntensity = t.env; m.needsUpdate = true; });
+  darkMat.envMapIntensity = Math.max(2.2, t.env); darkMat.needsUpdate = true;
+  floorMat.opacity = t.shadow; renderer.toneMappingExposure = t.exposure;
+  setTimeout(snap, 120);
+}
+document.querySelectorAll('[data-theme-btn]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-theme-btn]').forEach(x => x.classList.toggle('on', x === b)); applyTheme(b.dataset.themeBtn);
+}));
+
+function resize() { const s = stage.clientWidth; renderer.setSize(s, s, false); camera.aspect = 1; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+function snap() {
+  const url = renderer.domElement.toDataURL('image/png');
+  ['i128', 'i64', 'i32'].forEach(id => { document.getElementById(id).src = url; });
+}
+applyTheme('clay');
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  product.rotation.y = reduce ? -0.35 : -0.35 + Math.sin(t * 0.45) * 0.5;
+  const pulse = reduce ? 1 : 0.75 + 0.25 * Math.sin(t * 2.4);
+  led.material.emissiveIntensity = 2.2 * pulse; halo.material.opacity = pulse;
+  renderer.render(scene, camera);
+});
+setTimeout(snap, 400);
+
+// Export for the app icon: fixed angle, light fully on, rendered at 1024 and clipped to the
+// macOS rounded-square tile (824 px on the 1024 grid). Sent to a local receiver as a PNG data URL.
+window.exportIcon = async (o = {}) => {
+  const tile = new THREE.Color(o.tile || '#b9b9bb');
+  renderer.setAnimationLoop(null);
+  applyTheme('clay');
+  // Product shot: transparent 3D render over a painted backdrop.
+  scene.background = null;
+  key.castShadow = false; floor.visible = false;
+  contact.material.opacity = 0.85;
+  if (o.body) { bodyMat.color.set(o.body); bodyMat.roughness = 0.3; bodyMat.metalness = 0.05; knurl.material.color.set(o.body); }
+  if (o.silver) {
+    // Real metal: brushed silver body and base, darker steel grille.
+    bodyMat.color.set('#cfd2d6'); bodyMat.metalness = o.metal ?? 1; bodyMat.roughness = 0.32;
+    knurl.material.color.set('#cfd2d6'); knurl.material.metalness = 1; knurl.material.roughness = 0.3;
+    grilleMats.forEach(m => { m.metalness = 0.95; m.roughness = 0.38; });
+  }
+  if (o.studio) {
+    // GarageBand-style: one warm key light from above-left that visibly falls across the mic and
+    // pools on the floor, dim fill, so the form reads through light and shade.
+    key.intensity = 0.35; rim.intensity = 0.9;
+    // Metal only looks like metal when it reflects something: keep reflections up for silver.
+    const env = o.silver ? 1.25 : 0.35;
+    [bodyMat, cableMat, knurl.material, ...grilleMats].forEach(m => { m.envMapIntensity = env; m.needsUpdate = true; });
+    darkMat.envMapIntensity = 1.2;
+    const spot = new THREE.SpotLight(0xfff0dc, 95, 30, 0.42, 0.75, 1.4);
+    spot.position.set(-2.6, 6.8, 5.2);
+    spot.target.position.set(0.1, -0.6, 0); scene.add(spot.target);
+    spot.castShadow = true; spot.shadow.mapSize.set(2048, 2048); spot.shadow.radius = 10; spot.shadow.blurSamples = 24; spot.shadow.bias = -0.0004;
+    scene.add(spot);
+    floor.visible = true; floorMat.opacity = o.shadow ?? 0.5;
+    spot.shadow.radius = o.softness ?? 10;
+    if (o.fill) {
+      // Soft fill from the front right, so the chrome's underside reflects light instead of going black.
+      const fill = new THREE.DirectionalLight(0xffffff, o.fill); fill.position.set(3, -1, 6); scene.add(fill);
+      const bounce = new THREE.HemisphereLight(0xffffff, 0xd8d8dc, o.fill * 0.6); scene.add(bounce);
+    }
+    contact.material.opacity = 0.6;
+  }
+  if (o.cable) cableMat.color.set(o.cable);
+  if (o.knob) knob.material = new THREE.MeshStandardMaterial({ color: o.knob, roughness: 0.35, metalness: 0.6 });
+  product.rotation.y = 0.18;
+  led.material.emissiveIntensity = 2.4; halo.material.opacity = 1;
+  renderer.setPixelRatio(1); renderer.setSize(1024, 1024, false);
+  camera.position.set(0, -0.35, 9.4); camera.lookAt(0, -0.38, 0); camera.updateProjectionMatrix();
+
+  // Centre what you see: project the mic's bounding box and move the camera onto its middle.
+  product.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(product);
+  const corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z).project(camera));
+  const cx = (Math.min(...corners.map(c => c.x)) + Math.max(...corners.map(c => c.x))) / 2;
+  const cy = (Math.min(...corners.map(c => c.y)) + Math.max(...corners.map(c => c.y))) / 2;
+  const span = Math.max(...corners.map(c => c.x)) - Math.min(...corners.map(c => c.x));
+  const spanY = Math.max(...corners.map(c => c.y)) - Math.min(...corners.map(c => c.y));
+  const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+  camera.position.x += cx * halfH; camera.position.y += cy * halfH;
+  // Optical centre sits a little above the geometric one (the base and shadow weigh the bottom).
+  camera.position.y -= (o.lift ?? 0);
+  const target = new THREE.Vector3(camera.position.x, camera.position.y - 0.03, 0);
+  camera.lookAt(target);
+  camera.position.z *= (o.zoom ?? 1.04);   // below 1 fills more of the tile
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+
+  const out = document.createElement('canvas'); out.width = out.height = 1024;
+  const g = out.getContext('2d');
+  const inset = 100, size = 824, r = 185;
+  const hex = c => '#' + c.getHexString();
+  const light = o.studio ? tile.clone().lerp(new THREE.Color('#ffffff'), 0.12) : tile.clone().lerp(new THREE.Color('#ffffff'), 0.32);
+  const dark = tile.clone().multiplyScalar(o.studio ? 0.45 : 0.55);
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,0.30)'; g.shadowBlur = 30; g.shadowOffsetY = 14;
+  g.beginPath(); g.roundRect(inset, inset, size, size, r); g.fillStyle = hex(tile); g.fill();
+  g.restore();
+  g.save(); g.beginPath(); g.roundRect(inset, inset, size, size, r); g.clip();
+  // Studio sweep: a soft key light above and behind the mic, falling off to the edges.
+  const sweep = o.studio ? g.createLinearGradient(0, inset, 0, inset + size) : g.createRadialGradient(512, 400, 40, 512, 470, 560);
+  if (o.top && o.bottom) {
+    sweep.addColorStop(0, o.top); sweep.addColorStop(0.5, o.mid || o.top); sweep.addColorStop(1, o.bottom);
+  } else {
+    sweep.addColorStop(0, hex(light)); sweep.addColorStop(0.55, hex(tile)); sweep.addColorStop(1, hex(dark));
+  }
+  g.fillStyle = sweep; g.fillRect(inset, inset, size, size);
+  if (o.studio && o.pool) {
+    // The pool of light on the floor under the mic.
+    const pool = g.createRadialGradient(470, 790, 10, 490, 790, 330);
+    pool.addColorStop(0, 'rgba(255,236,210,0.22)'); pool.addColorStop(1, 'rgba(255,236,210,0)');
+    g.save(); g.translate(0, 790); g.scale(1, 0.38); g.translate(0, -790);
+    g.fillStyle = pool; g.fillRect(inset, 400, size, 800); g.restore();
+  }
+  // Floor: slightly darker band where the sweep curves into the floor.
+  const floorBand = g.createLinearGradient(0, 660, 0, inset + size);
+  floorBand.addColorStop(0, 'rgba(0,0,0,0)'); floorBand.addColorStop(1, 'rgba(0,0,0,0.18)');
+  g.fillStyle = floorBand; g.fillRect(inset, 660, size, inset + size - 660);
+  g.drawImage(renderer.domElement, 0, 0, 1024, 1024, inset, inset, size, size);
+  const sheen = g.createLinearGradient(0, inset, 0, inset + size);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.10)'); sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
+  g.fillStyle = sheen; g.fillRect(inset, inset, size, size);
+  if (o.glass) {
+    // Glassy rim: a bright hairline catching light along the top, fading to a dark edge below.
+    const edge = g.createLinearGradient(0, inset, 0, inset + size);
+    edge.addColorStop(0, 'rgba(255,255,255,0.75)'); edge.addColorStop(0.35, 'rgba(255,255,255,0.18)');
+    edge.addColorStop(0.7, 'rgba(255,255,255,0.05)'); edge.addColorStop(1, 'rgba(0,0,0,0.22)');
+    g.lineWidth = 4; g.strokeStyle = edge;
+    g.beginPath(); g.roundRect(inset + 2, inset + 2, size - 4, size - 4, r - 2); g.stroke();
+    // Inner glow just inside the rim, so the tile reads as a pane of glass.
+    const inner = g.createLinearGradient(0, inset, 0, inset + 140);
+    inner.addColorStop(0, 'rgba(255,255,255,0.18)'); inner.addColorStop(1, 'rgba(255,255,255,0)');
+    g.lineWidth = 18; g.strokeStyle = inner;
+    g.beginPath(); g.roundRect(inset + 12, inset + 12, size - 24, size - 24, r - 12); g.stroke();
+  }
+  g.restore();
+  await fetch('/save/' + (o.name || 'AppIcon-1024') + '.png', { method: 'POST', body: out.toDataURL('image/png') });
+  return 'sent';
+};
+</script>
+</body>
+</html>

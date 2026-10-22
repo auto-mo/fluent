@@ -1,0 +1,32 @@
+.DS_Store
+# secrets
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+# databases
+*.db
+*.db.*
+*.db-*
+*.sqlite
+*.sqlite3
+# local backups
+*.bak
+*.bak-*
+*.bak.*
+.bak-*/
+# environments and caches
+.venv/
+venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.log
+.claude/settings.local.json
+
+# Fluent
+build/
+Fluent.xcodeproj/
+*.xcuserstate
+xcuserdata/

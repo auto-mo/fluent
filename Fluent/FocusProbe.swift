@@ -1,0 +1,43 @@
+import AppKit
+import ApplicationServices
+
+/// Is the focused thing in an app somewhere text can go? Safe to call off the main thread.
+enum FocusProbe {
+    enum State: Sendable { case textBox, notText, unknown }
+
+    /// For Chromium and Electron apps, "nothing focused" can also mean their accessibility is off,
+    /// so it counts as unknown (type anyway) rather than "hold".
+    static func state(pid: pid_t, chromium: Bool) -> State {
+        let s = state(pid: pid)
+        if chromium, s == .notText, noFocus(pid: pid) { return .unknown }
+        return s
+    }
+
+    private static func noFocus(pid: pid_t) -> Bool {
+        var focused: CFTypeRef?
+        return AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute as CFString, &focused) == .noValue
+    }
+
+    /// `.unknown` when the app doesn't answer; callers treat that like a text box, so apps that hide
+    /// their text boxes from Accessibility still get the text.
+    static func state(pid: pid_t) -> State {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        var focused: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused)
+        if err == .noValue { return .notText }          // nothing has focus at all
+        guard err == .success, let ref = focused, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return .unknown }
+        let element = ref as! AXUIElement
+        var roleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+        let role = roleRef as? String ?? ""
+        if FocusInspector.textRoles.contains(role) { return .textBox }
+        for attr in [kAXValueAttribute, kAXSelectedTextAttribute] {
+            var settable: DarwinBoolean = false
+            if AXUIElementIsAttributeSettable(element, attr as CFString, &settable) == .success, settable.boolValue {
+                return .textBox
+            }
+        }
+        return .notText
+    }
+}
