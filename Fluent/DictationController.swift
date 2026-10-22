@@ -360,7 +360,7 @@ final class DictationController {
             let samples = try AudioConverter().resampleAudioFile(path: url.path)
             raw = try await model.transcribe(samples)
         }
-        let fixed = ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(Fillers.remove(raw))))
+        let fixed = ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw)))))
         return dictionary.apply(to: fixed, app: nil).0
     }
 
@@ -486,7 +486,7 @@ final class DictationController {
                 let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
                 let before: String? = if let pid { await Task.detached { CaretContext.textBefore(pid: pid) }.value } else { nil }
                 let literal = Cleaner.literalApps.contains(front?.bundleIdentifier ?? "")
-                let digitsFixed = literal ? raw : ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(Fillers.remove(raw))))
+                let digitsFixed = literal ? raw : ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw)))))
                 // Your names first, so cleanup sees them right; again after, in case it changed one.
                 let named = dictionary.apply(to: digitsFixed, app: app).0
                 // Chat stays one paragraph; elsewhere spoken sequences become lists, and email gets its layout.

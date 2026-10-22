@@ -54,18 +54,34 @@ enum TextShape {
             if let i = ordinals.firstIndex(of: word) { return Cue(wordStart: wordR.lowerBound, itemStart: all.upperBound, n: i + 1, family: 1) }
             return Cue(wordStart: wordR.lowerBound, itemStart: all.upperBound, n: -1, family: 1)   // finally, lastly
         }
-        // The first run that starts at 1 and counts up (ordinals may end with "finally").
-        var run: [Cue] = []
-        for c in cues {
-            if run.isEmpty { if c.n == 1 { run = [c] }; continue }
-            let last = run.last!
-            if c.family == last.family, c.n == last.n + 1 || (c.n == -1 && c.family == 1) { run.append(c); if c.n == -1 { break } }
-            else if run.count >= 2 { break }
-            else { run = c.n == 1 ? [c] : [] }
+        // The first run that counts up from 1 (ordinals may end with "finally"). A run from 2 counts
+        // too when it has two or more cues: the first marker was lost ("First" heard as "um"), so
+        // the sentence just before "second" is item 1.
+        func findRun(from start: Int) -> [Cue] {
+            var run: [Cue] = []
+            for c in cues {
+                if run.isEmpty { if c.n == start { run = [c] }; continue }
+                let last = run.last!
+                if c.family == last.family, c.n == last.n + 1 || (c.n == -1 && c.family == 1) { run.append(c); if c.n == -1 { break } }
+                else if run.count >= 2 { break }
+                else { run = c.n == start ? [c] : [] }
+            }
+            return run
+        }
+        var run = findRun(from: 1)
+        var lostFirst: Range<String.Index>?
+        if run.count < 2 {
+            run = findRun(from: 2)
+            guard run.count >= 2 else { return text }
+            // Item 1: the last sentence before "second".
+            let before = text[..<run[0].wordStart]
+            guard let end = before.lastIndex(where: { ".?!".contains($0) }) else { return text }
+            let start = before[..<end].lastIndex(where: { ".?!:\n".contains($0) }).map { text.index(after: $0) } ?? text.startIndex
+            lostFirst = start..<text.index(after: end)
         }
         guard run.count >= 2 else { return text }
 
-        var items: [String] = []
+        var items: [String] = lostFirst.map { [String(text[$0])] } ?? []
         for (i, c) in run.enumerated() {
             let end: String.Index
             if i + 1 < run.count { end = run[i + 1].wordStart }
@@ -79,7 +95,7 @@ enum TextShape {
             item.split(whereSeparator: { !$0.isLetter }).contains { $0.count >= 2 && !cardinals.contains($0.lowercased()) }
         }) else { return text }
 
-        var intro = String(text[..<run[0].wordStart]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var intro = String(text[..<(lostFirst?.lowerBound ?? run[0].wordStart)]).trimmingCharacters(in: .whitespacesAndNewlines)
         if intro.hasSuffix(",") || intro.hasSuffix(";") { intro = String(intro.dropLast()) + ":" }
         let lastEnd: String.Index = {
             let c = run.last!
@@ -118,18 +134,27 @@ enum TextShape {
                                    "thank you", "talk soon", "regards", "best", "thanks", "cheers", "sincerely", "warmly"]
 
     /// A sign-off with your own name at the very end ("... Let me know. Best, Sam") goes on its own
-    /// lines. Only your name counts, so "Thanks Paul" at the end of a message is left as a sentence.
+    /// lines. Only your name counts, so "Thanks Paul" at the end of a message is left as a sentence. A
+    /// near miss from the speech model ("Jon" for "John") counts and is written correctly.
     static func signOff(_ text: String, fullName: String = NSFullUserName()) -> String {
-        let names = Set([fullName, fullName.split(separator: " ").first.map(String.init) ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() })
-        guard !names.isEmpty else { return text }
+        let first = fullName.split(separator: " ").first.map(String.init) ?? ""
+        guard !first.isEmpty else { return text }
         let alts = signOffs.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
-        let nameAlts = names.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
-        guard let re = try? NSRegularExpression(pattern: #"(?i)(^|[.?!]\s+|\n)(\#(alts))[,.!]?\s+(\#(nameAlts))[.!]?\s*$"#),
+        guard let re = try? NSRegularExpression(pattern: #"(?i)(^|[.?!]\s+|\n)(\#(alts))[,.!]?\s+(\p{L}[\p{L}'-]*(?:\s\p{L}[\p{L}'-]*)?)[.!]?\s*$"#),
               let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let lead = Range(m.range(at: 1), in: text), let word = Range(m.range(at: 2), in: text),
-              let name = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { return text }
+              let nameR = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { return text }
+        let said = String(text[nameR])
+        func close(_ a: String, _ b: String) -> Bool {
+            let x = a.lowercased(), y = b.lowercased()
+            return x == y || (y.count >= 4 && WordDictionary.editDistance(x, y) <= 1)
+        }
+        let name: String
+        if close(said, fullName) { name = fullName }
+        else if close(said, first) { name = first }
+        else { return text }
         let body = String(text[..<all.lowerBound]) + String(text[lead]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let sign = capitaliseFirst(String(text[word])) + ",\n" + capitaliseFirst(String(text[name]))
+        let sign = capitaliseFirst(String(text[word])) + ",\n" + name
         return body.isEmpty ? sign : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sign
     }
 

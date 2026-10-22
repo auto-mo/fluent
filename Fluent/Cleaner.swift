@@ -70,9 +70,11 @@ final class Cleaner {
         }
     }
 
-    /// Longer passages get longer, up to 3.5 s; a short sentence gets 1.5 s.
+    /// Right before fast: cleanup gets the time it needs (a 50-word email with a spoken correction
+    /// takes a few seconds), and the ceiling only stops a stuck model from holding the text forever.
+    /// For speed, switch cleanup off (the wand on the pill).
     static func timeLimit(for text: String) -> Double {
-        min(3.5, max(1.5, 1.0 + Double(text.split(separator: " ").count) * 0.02))
+        min(12, max(4, Double(text.split(separator: " ").count) * 0.15))
     }
 
     private static let triggers: [String] = [
@@ -172,7 +174,7 @@ final class Cleaner {
         return true
     }
 
-    static let correctionCues = ["no wait", "wait,", "sorry", "i mean", "actually", "scratch that",
+    static let correctionCues = ["no wait", "wait,", "sorry", "i mean", "actually", "scratch that", "never mind",
                                  "no,", "rather", "make that", "correction"]
     private static let smallNumbers: [String: String] = [
         "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
@@ -484,7 +486,13 @@ enum Fillers {
         // ", uh," between words disappears entirely, commas included.
         let text = text.replacingOccurrences(of: #"(?i),\s*(?:u+h*m+|u+h+|e+r+m*|h+m+)\s*,"#, with: "", options: .regularExpression)
         let range = NSRange(text.startIndex..., in: text)
-        var out = pattern.stringByReplacingMatches(in: text, range: range, withTemplate: "$1")
+        // \u{1} marks where a filler was, so a sentence that began with one gets its capital back.
+        var out = pattern.stringByReplacingMatches(in: text, range: range, withTemplate: "$1\u{1}")
+        let starts = try! NSRegularExpression(pattern: "([.!?]\\s*)\u{1}[\\s\u{1}]*(\\p{Ll})")
+        for m in starts.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+            if let r = Range(m.range(at: 2), in: out) { out.replaceSubrange(r, with: out[r].uppercased()) }
+        }
+        out.removeAll { $0 == "\u{1}" }
         out = out.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+([,.!?])"#, with: "$1", options: .regularExpression)
             .replacingOccurrences(of: #"^[\s,]+"#, with: "", options: .regularExpression)
@@ -494,6 +502,43 @@ enum Fillers {
             out = first.uppercased() + out.dropFirst()
         }
         return out.trimmingCharacters(in: .whitespaces)
+    }
+}
+
+/// A correction said as its own sentence: "Can you make Thursday? Sorry, Friday's call." becomes
+/// "Can you make Friday's call?". Only when the corrected word and the new one are the same kind
+/// (a day, a month or a number), so "Thanks for coming. Sorry, I have to leave." is left alone.
+/// The AI cleanup misses this shape, and a rule can't change anything else.
+enum SentenceCorrections {
+    private static let re = try! NSRegularExpression(pattern:
+        #"(?i)\b([\p{L}\d:']+)([.?!])\s+(?:sorry|no wait|wait|actually|i mean|no)\s*,?\s+([^.?!\n]{1,40}?)([.?!])"#)
+    private static let days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "today", "tomorrow", "tonight"]
+    private static let months = ["january", "february", "march", "april", "may", "june", "july", "august", "september",
+                                 "october", "november", "december"]
+
+    private static func kind(_ word: String) -> Int? {
+        let w = word.lowercased().replacingOccurrences(of: "'s", with: "").replacingOccurrences(of: "’s", with: "")
+        if days.contains(w) { return 0 }
+        if months.contains(w) { return 1 }
+        if w.first?.isNumber == true || SpokenNumbers.isNumberWord(w) { return 2 }
+        return nil
+    }
+
+    static func apply(_ text: String) -> String {
+        var out = text
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let oldR = Range(m.range(at: 1), in: text), let punctR = Range(m.range(at: 2), in: text),
+                  let newR = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { continue }
+            let replacement = String(text[newR]).trimmingCharacters(in: .whitespaces)
+            guard let firstNew = replacement.split(separator: " ").first.map(String.init),
+                  let k = kind(String(text[oldR])), kind(firstNew) == k,
+                  replacement.split(separator: " ").count <= 5 else { continue }
+            let fixed = (k == 0 || k == 1) ? firstNew.prefix(1).uppercased() + replacement.dropFirst() : replacement
+            let start = out.index(out.startIndex, offsetBy: text.distance(from: text.startIndex, to: all.lowerBound))
+            let end = out.index(start, offsetBy: text.distance(from: all.lowerBound, to: all.upperBound))
+            out.replaceSubrange(start..<end, with: fixed + text[punctR])
+        }
+        return out
     }
 }
 
