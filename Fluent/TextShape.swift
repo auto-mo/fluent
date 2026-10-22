@@ -8,11 +8,10 @@ import Foundation
 enum TextShape {
     static func apply(_ text: String, lists: Bool, email: Bool, atStart: Bool) -> String {
         var t = spokenBreaks(text)
+        // The sign-off comes off first, so it never ends up inside the last list item.
+        if email { t = signOff(t) }
         if lists { t = numberedList(t) }
-        if email {
-            if atStart { t = greeting(t) }
-            t = signOff(t)
-        }
+        if email, atStart { t = greeting(t) }
         return t
     }
 
@@ -90,7 +89,7 @@ enum TextShape {
             else { end = text.endIndex }
             items.append(String(text[c.itemStart..<end]))
         }
-        let cleaned = items.map(tidyItem)
+        var cleaned = items.map(tidyItem)
         // Counting out loud ("one, two, three") is not a list: every item needs a real word.
         guard cleaned.allSatisfy({ item in
             item.split(whereSeparator: { !$0.isLetter }).contains { $0.count >= 2 && !cardinals.contains($0.lowercased()) }
@@ -103,9 +102,32 @@ enum TextShape {
             if let stop = text[c.itemStart...].firstIndex(where: { ".?!\n".contains($0) }) { return text.index(after: stop) }
             return text.endIndex
         }()
-        let outro = String(text[lastEnd...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var outro = String(text[lastEnd...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        // A run-on last item ("Are you free Friday, let me know.") gives its closing phrase back.
+        if let (item, closer) = splitCloser(cleaned[cleaned.count - 1]) {
+            cleaned[cleaned.count - 1] = item
+            outro = outro.isEmpty ? closer : closer + "\n\n" + outro
+        }
         let list = cleaned.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
         return [intro, list, outro].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private static let closers = ["let me know what you think", "let me know", "looking forward to it", "talk soon"]
+    private static let questionStarts: Set<String> = ["are", "is", "am", "can", "could", "did", "do", "does", "will", "would",
+                                                      "should", "have", "has", "when", "what", "where", "why", "who", "how", "which"]
+
+    /// "Are you free Friday, let me know." becomes ("Are you free Friday?", "Let me know.").
+    private static func splitCloser(_ item: String) -> (String, String)? {
+        let lower = item.lowercased()
+        for c in closers {
+            guard let r = lower.range(of: ", " + c, options: .backwards),
+                  lower[r.upperBound...].allSatisfy({ ".!?".contains($0) }) else { continue }
+            let head = String(item[..<item.index(item.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: r.lowerBound))])
+            let first = head.split(separator: " ").first.map { $0.lowercased() } ?? ""
+            let ending = questionStarts.contains(first) ? "?" : "."
+            return (head + ending, capitaliseFirst(c) + ".")
+        }
+        return nil
     }
 
     /// Trims the joins between items ("eggs, and" becomes "eggs") and capitalises the item.
@@ -141,20 +163,26 @@ enum TextShape {
         let first = fullName.split(separator: " ").first.map(String.init) ?? ""
         guard !first.isEmpty else { return text }
         let alts = signOffs.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
-        guard let re = try? NSRegularExpression(pattern: #"(?i)(^|[.?!]\s+|\n)(\#(alts))[,.!]?\s+(\p{L}[\p{L}'-]*(?:\s\p{L}[\p{L}'-]*)?)[.!]?\s*$"#),
+        guard let re = try? NSRegularExpression(pattern: #"(?i)(^|[.?!,]\s+|\n)(\#(alts))[,.!]?\s+(\p{L}[\p{L}'-]*(?:\s\p{L}[\p{L}'-]*)?)[.!]?\s*$"#),
               let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let lead = Range(m.range(at: 1), in: text), let word = Range(m.range(at: 2), in: text),
               let nameR = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { return text }
         let said = String(text[nameR])
         func close(_ a: String, _ b: String) -> Bool {
             let x = a.lowercased(), y = b.lowercased()
-            return x == y || (y.count >= 4 && WordDictionary.editDistance(x, y) <= 1)
+            if x == y || (y.count >= 4 && WordDictionary.editDistance(x, y) <= 1) { return true }
+            // Sounds like it: the speech model splits an unusual name into words ("Mary Ann" for
+            // "Marianne"). Same first letter and at most half different counts.
+            let sx = WordDictionary.squash(a), sy = WordDictionary.squash(b)
+            guard sy.count >= 4, sx.first == sy.first else { return false }
+            return Double(WordDictionary.editDistance(sx, sy)) <= Double(max(sx.count, sy.count)) * 0.5
         }
         let name: String
         if close(said, fullName) { name = fullName }
         else if close(said, first) { name = first }
         else { return text }
-        let body = String(text[..<all.lowerBound]) + String(text[lead]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var body = String(text[..<all.lowerBound]) + String(text[lead]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.hasSuffix(",") { body = String(body.dropLast()) + "." }   // "..., let me know, thanks, Sam."
         let sign = capitaliseFirst(String(text[word])) + ",\n" + name
         return body.isEmpty ? sign : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sign
     }

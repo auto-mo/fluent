@@ -111,6 +111,11 @@ final class Cleaner {
         let a = wordCount(raw), b = wordCount(out)
         guard b > 0, Double(b) <= Double(a) * 1.15 + 2, Double(b) >= Double(a) * 0.5 else { return false }
         guard digitsAreFaithful(out, to: raw), numbersKept(out, from: raw), wordsKept(out, from: raw) else { return false }
+        // Contractions stay as said: "I'm" never becomes "I am".
+        let outLower = out.lowercased().replacingOccurrences(of: "’", with: "'")
+        for word in letterWords(raw.replacingOccurrences(of: "’", with: "'")) where word.contains("'") && word.count > 2 {
+            if !outLower.contains(word) { return false }
+        }
         // Never let a fact change: every word the model introduces must be a near-spelling of a word
         // the speaker said ("Have" to "Ave") or a standard written abbreviation. "Tuesday" to
         // "Wednesday" fails this and the raw words are used instead.
@@ -512,6 +517,9 @@ enum Fillers {
 enum SentenceCorrections {
     private static let re = try! NSRegularExpression(pattern:
         #"(?i)\b([\p{L}\d:']+)([.?!])\s+(?:sorry|no wait|wait|actually|i mean|no)\s*,?\s+([^.?!\n]{1,40}?)([.?!])"#)
+    /// The same inside a sentence: "make it to Thursday sorry, Friday's call" keeps only "Friday's".
+    private static let inline = try! NSRegularExpression(pattern:
+        #"(?i)\b([\p{L}\d:']+),?\s+(?:sorry|no wait|wait|i mean)\s*,?\s+([\p{L}\d:'’]+)"#)
     private static let days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "today", "tomorrow", "tonight"]
     private static let months = ["january", "february", "march", "april", "may", "june", "july", "august", "september",
                                  "october", "november", "december"]
@@ -525,6 +533,16 @@ enum SentenceCorrections {
     }
 
     static func apply(_ text: String) -> String {
+        var out = sentences(text)
+        for m in inline.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+            guard let oldR = Range(m.range(at: 1), in: out), let newR = Range(m.range(at: 2), in: out),
+                  let all = Range(m.range, in: out), let k = kind(String(out[oldR])), kind(String(out[newR])) == k else { continue }
+            out.replaceSubrange(all, with: String(out[newR]))
+        }
+        return out
+    }
+
+    private static func sentences(_ text: String) -> String {
         var out = text
         for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let oldR = Range(m.range(at: 1), in: text), let punctR = Range(m.range(at: 2), in: text),
