@@ -2,8 +2,8 @@ import AppKit
 import ApplicationServices
 
 /// After Fluent types something, watches that stretch of text for a minute. When you replace a
-/// word or two with something that sounds or spells similar and looks like a name ("whisper flow"
-/// to "Wispr Flow"), that's a correction worth remembering. Changes of mind ("Thursday" to
+/// word or two with something that sounds or spells similar and looks like a name ("fluid audio"
+/// to "FluidAudio"), that's a correction worth remembering. Changes of mind ("Thursday" to
 /// "Friday"), grammar fixes ("their" to "there") and number changes are not learned.
 @MainActor
 final class EditLearner {

@@ -282,10 +282,10 @@ enum DiagnosticModes {
         for n in world { candidates.append(C(term: n, form: n, guarded: true)) }
         var md = "Synced names loaded: \(world.count)\n\n## Replacement\n\n| Heard | Written |\n|---|---|\n"
         for line in [
-            "See how it didn't get whisper flow right?", "The fluid audio repo has a new release.",
+            "The fluid audio's release notes are out.", "The fluid audio repo has a new release.",
             "Restart the N8N container, then check fluid audio.", "Send it on linked in or what's app.",
             "This project is due Friday.", "Can you zoom in on the outlook slide?", "I used chat gpt and open ai today.",
-            "Speak type and whisper flow.", "My iphone and mac book died.",
+            "Check fluid audio's new release.", "My iphone and mac book died.",
             "I paid with pay pal on e bay.", "Give me my space please.", "I use duolingo and spotify every day.",
             "Did you see the space x launch?", "The blogger wrote about the uber driver.",
         ] {
@@ -295,7 +295,7 @@ enum DiagnosticModes {
         let checker = NSSpellChecker.shared
         func isWord(_ w: String) -> Bool { w.split(separator: " ").allSatisfy { checker.checkSpelling(of: $0.lowercased(), startingAt: 0).location == NSNotFound } }
         for (typed, edited) in [
-            ("See how it didn't get whisper flow right?", "See how it didn't get Wispr Flow right?"),
+            ("Open the figma file.", "Open the Figma file."),
             ("I spoke to leaner about it.", "I spoke to Lena about it."),
             ("Let's meet on Thursday.", "Let's meet on Friday."),
             ("Put it over their.", "Put it over there."),

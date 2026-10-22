@@ -13,7 +13,7 @@ final class WordDictionary {
     struct Entry: Codable, Identifiable, Equatable {
         var id = UUID()
         var term: String
-        /// Other ways the speech model writes it ("whisper flow" for "Wispr Flow").
+        /// Other ways the speech model writes it ("cooper netties" for "Kubernetes").
         var heard: [String] = []
         var source: Source
         /// Learned entries apply in the app they were learned in until seen twice.
@@ -162,7 +162,13 @@ final class WordDictionary {
             var matched = false
             for n in stride(from: min(3, words.count - i), through: 1, by: -1) {
                 let window = words[i..<(i + n)]
-                let core = window.joined(separator: " ")
+                var core = window.joined(separator: " ")
+                // A possessive ("FluidAudio's") matches its name and keeps the 's.
+                var possessive = ""
+                if let r = core.range(of: #"['’]s(?=\p{P}*$)"#, options: .regularExpression) {
+                    possessive = String(core[r])
+                    core.removeSubrange(r)
+                }
                 let key = squash(core)
                 guard key.count >= 2 else { continue }
                 let firstWord = window.first!.lowercased().trimmingCharacters(in: .punctuationCharacters)
@@ -177,7 +183,7 @@ final class WordDictionary {
                 // Keep punctuation that was around the words ("FluidAudio," "(n8n)").
                 let lead = String(window.first!.prefix { $0.isPunctuation })
                 let trail = String(window.last!.reversed().prefix { $0.isPunctuation }.reversed())
-                out.append(lead + hit.term + trail)
+                out.append(lead + hit.term + possessive + trail)
                 applied.append(hit.term)
                 i += n
                 matched = true
@@ -209,7 +215,7 @@ final class WordDictionary {
     /// Seeded into a new dictionary; add your own names in the app.
     static let starter: [(String, [String])] = [
         ("n8n", ["n 8 n", "n eight n", "nate n"]), ("FluidAudio", ["fluid audio"]),
-        ("SpeakType", ["speak type"]), ("Wispr Flow", ["whisper flow", "whisperflow"]),
+        ("Kubernetes", ["cooper netties"]),
     ]
 
     /// Company and product names that speech models often split or misspell. Only names that

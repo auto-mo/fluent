@@ -93,6 +93,18 @@ enum AppStyle: String {
     static let documentSites = ["Gmail", "Google Docs", "Outlook", "Notion", "Google Keep", "Superhuman"]
     static let chatSites = ["Slack", "ChatGPT", "Claude", "WhatsApp", "Messenger", "Discord", "Gemini"]
 
+    static let emailApps: Set<String> = [
+        "com.apple.mail", "com.microsoft.Outlook", "com.superhuman.electron", "com.readdle.SparkDesktop",
+        "com.readdle.smartemail-Mac", "com.mimestream.Mimestream",
+    ]
+
+    /// Email gets its own layout (greeting and sign-off on their own lines).
+    static func isEmail(bundleID: String?, windowTitle: String?) -> Bool {
+        if let id = bundleID, emailApps.contains(id) { return true }
+        let title = windowTitle ?? ""
+        return ["Gmail", "Outlook", "Superhuman"].contains { title.localizedCaseInsensitiveContains($0) }
+    }
+
     /// Uses the app, and for browsers and web apps the window title (which names the site).
     static func detect(bundleID: String?, appName: String?, windowTitle: String?) -> AppStyle {
         if let id = bundleID {
@@ -117,20 +129,13 @@ enum AppStyle: String {
         return title as? String
     }
 
-    /// Words that introduce a spoken list.
-    static let listCues = ["first", "second", "third", "firstly", "secondly", "number one", "bullet", "bullet point",
-                           "point one", "one,", "two,", "three,"]
-
     var formattingInstruction: String {
         switch self {
-        case .document:
-            return "The text goes into an email or document. If the speaker lists several items (\"first... second...\", " +
-                "\"one... two... three...\", \"bullet point\"), put each item on its own line: numbered (\"1. \") when they " +
-                "counted, otherwise with \"- \". Keep any sentence before the list as its own line. Otherwise write normal paragraphs."
+        case .document, .plain:
+            // Lists and line breaks are added afterwards by rule (TextShape), never by the model.
+            return "Do not add lists or line breaks unless the speaker says \"new line\" or \"bullet point\"."
         case .chat:
             return "The text goes into a chat message. Keep it as plain sentences in one paragraph. Never make lists or line breaks."
-        case .plain:
-            return "Do not add lists or line breaks unless the speaker says \"new line\" or \"bullet point\"."
         }
     }
 }

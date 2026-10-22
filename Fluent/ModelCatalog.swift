@@ -64,7 +64,7 @@ enum ModelCatalog {
     private static let allBuiltIn: [ModelInfo] = [
         ModelInfo(id: "parakeet-v2", name: "Parakeet v2", detail: "English. Most accurate for English; writes numbers well.", kind: .parakeet("v2")),
         ModelInfo(id: "parakeet-ultra", name: "Parakeet Ultra", detail: "25 European languages, detected automatically; writes numbers well.", kind: .parakeet("ultra")),
-        ModelInfo(id: "parakeet-v3", name: "Parakeet v3", detail: "What SpeakType uses. 25 languages; tends to spell numbers out.", kind: .parakeet("v3")),
+        ModelInfo(id: "parakeet-v3", name: "Parakeet v3", detail: "25 languages; tends to spell numbers out.", kind: .parakeet("v3")),
         ModelInfo(id: "parakeet-phonon2", name: "Phonon-2", detail: "English re-training of v3. Spells numbers out in tests.", kind: .parakeet("phonon2")),
         ModelInfo(id: "parakeet-redux", name: "Parakeet Redux", detail: "Small download (about 220 MB). Mostly right in tests, with small glitches.", kind: .parakeet("redux")),
         ModelInfo(id: "parakeet-mini", name: "Parakeet Mini", detail: "English, 110M parameters: the lightest, for Macs with 8 GB or less. A little less accurate.", kind: .parakeet("mini")),

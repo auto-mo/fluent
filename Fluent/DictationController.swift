@@ -489,14 +489,18 @@ final class DictationController {
                 let digitsFixed = literal ? raw : ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(Fillers.remove(raw))))
                 // Your names first, so cleanup sees them right; again after, in case it changed one.
                 let named = dictionary.apply(to: digitsFixed, app: app).0
-                // Email and documents get lists; chat stays one paragraph.
+                // Chat stays one paragraph; elsewhere spoken sequences become lists, and email gets its layout.
                 let title: String? = if let pid { await Task.detached { AppStyle.windowTitle(pid: pid) }.value } else { nil }
-                let style = UserDefaults.standard.object(forKey: "formatLists") as? Bool ?? true
-                    ? AppStyle.detect(bundleID: front?.bundleIdentifier, appName: app, windowTitle: title) : .plain
+                let style = AppStyle.detect(bundleID: front?.bundleIdentifier, appName: app, windowTitle: title)
                 let cleaned = cleanupOn
                     ? await cleaner.clean(named, before: before, appBundleID: front?.bundleIdentifier, terms: dictionary.hintTerms, style: style)
                     : Cleaner.Output(text: named, cleaned: false, seconds: 0)
-                let final = snippets.expand(dictionary.apply(to: cleaned.text, app: app).0)
+                let formatting = (UserDefaults.standard.object(forKey: "formatLists") as? Bool ?? true) && !literal && style != .chat
+                let shaped = formatting
+                    ? TextShape.apply(cleaned.text, lists: true, email: AppStyle.isEmail(bundleID: front?.bundleIdentifier, windowTitle: title),
+                                      atStart: (before ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    : cleaned.text
+                let final = snippets.expand(dictionary.apply(to: shaped, app: app).0)
                 // Is there somewhere to type? If definitely not, hold the text until you click into a box.
                 let target = NSWorkspace.shared.frontmostApplication
                 let isSelf = target?.processIdentifier == ProcessInfo.processInfo.processIdentifier

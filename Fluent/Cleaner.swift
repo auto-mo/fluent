@@ -40,9 +40,8 @@ final class Cleaner {
             return Output(text: raw, cleaned: false, seconds: 0)
         }
         // Most sentences come out of the speech model clean; only call the AI when there's
-        // something it could fix, so those dictations don't wait on it.
-        let lists = style == .document && AppStyle.listCues.contains(where: { raw.lowercased().contains($0) })
-        guard Self.needsCleanup(raw) || lists else { return Output(text: raw, cleaned: false, seconds: 0) }
+        // something it could fix, so those dictations don't wait on it. (Lists are made by rule.)
+        guard Self.needsCleanup(raw) else { return Output(text: raw, cleaned: false, seconds: 0) }
         let s = (session as? LanguageModelSession) ?? LanguageModelSession(instructions: Self.instructions)
         var prompt = ""
         if let before, !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -61,7 +60,7 @@ final class Cleaner {
             timer.cancel()
             guard let reply else { return Output(text: raw, cleaned: false, seconds: Date.now.timeIntervalSince(t0)) }
             let out = Self.unwrap(reply)
-            guard Self.isPlausible(out, from: raw, allowLists: style == .document) else {
+            guard Self.isPlausible(out, from: raw) else {
                 return Output(text: raw, cleaned: false, seconds: Date.now.timeIntervalSince(t0), modelText: out)
             }
             return Output(text: out, cleaned: out != raw, seconds: Date.now.timeIntervalSince(t0), modelText: out)
@@ -105,11 +104,11 @@ final class Cleaner {
 
     /// Rejects answers that aren't a cleanup of the input: it answered a question, added text,
     /// or dropped too much. Fillers and corrections can only make it shorter, never much longer.
-    static func isPlausible(_ out: String, from raw: String, allowLists: Bool = false) -> Bool {
-        guard !out.isEmpty, allowLists || !out.contains("\n") || raw.contains("\n") else { return false }
+    static func isPlausible(_ out: String, from raw: String) -> Bool {
+        guard !out.isEmpty, !out.contains("\n") || raw.contains("\n") else { return false }
         let a = wordCount(raw), b = wordCount(out)
         guard b > 0, Double(b) <= Double(a) * 1.15 + 2, Double(b) >= Double(a) * 0.5 else { return false }
-        guard digitsAreFaithful(out, to: raw), numbersKept(out, from: raw), wordsKept(out, from: raw, allowLists: allowLists) else { return false }
+        guard digitsAreFaithful(out, to: raw), numbersKept(out, from: raw), wordsKept(out, from: raw) else { return false }
         // Never let a fact change: every word the model introduces must be a near-spelling of a word
         // the speaker said ("Have" to "Ave") or a standard written abbreviation. "Tuesday" to
         // "Wednesday" fails this and the raw words are used instead.
@@ -150,12 +149,6 @@ final class Cleaner {
         "um", "uh", "er", "erm", "hmm", "like", "so", "basically", "actually", "literally", "just",
         "well", "right", "okay", "ok", "yeah", "anyway", "totally", "really",
     ]
-    /// Words that introduce list items; in emails and documents they become "1." or "- ".
-    private static let listWords: Set<String> = [
-        "first", "firstly", "second", "secondly", "third", "thirdly", "fourth", "fifth", "next", "finally",
-        "lastly", "bullet", "point", "number", "item",
-    ]
-
     /// Words that legitimately disappear when cleanup writes standard forms.
     private static let rewrittenWords: Set<String> = [
         "street", "avenue", "road", "drive", "boulevard", "lane", "suite", "apartment", "massachusetts",
@@ -165,7 +158,7 @@ final class Cleaner {
     /// Cleanup may not delete meaning. Every word the speaker said must survive, except fillers,
     /// spoken numbers (now digits), words rewritten as abbreviations or symbols, and words fixed to a
     /// near spelling ("Have" to "Ave"). After a spoken correction ("no wait"), deletions are expected.
-    static func wordsKept(_ out: String, from raw: String, allowLists: Bool = false) -> Bool {
+    static func wordsKept(_ out: String, from raw: String) -> Bool {
         var lower = raw.lowercased()
         if correctionCues.contains(where: { lower.contains($0) }) { return true }
         for phrase in droppablePhrases { lower = lower.replacingOccurrences(of: phrase, with: " ") }
@@ -173,7 +166,6 @@ final class Cleaner {
         let outSet = Set(outWords)
         for word in letterWords(lower) where !outSet.contains(word) {
             if droppableWords.contains(word) || numberWords.contains(word) || rewrittenWords.contains(word) { continue }
-            if allowLists, listWords.contains(word) { continue }
             if word.count >= 3, outWords.contains(where: { $0.count >= 2 && editDistance($0, word) <= 2 }) { continue }
             return false
         }

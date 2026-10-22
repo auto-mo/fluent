@@ -656,7 +656,7 @@ private struct DictionaryPane: View {
                     Button("Add", action: add).buttonStyle(PrimaryButtonStyle()).disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            Text("Fluent writes these exactly as listed. It also learns them when you correct a word right after it types, for example \"whisper flow\" to \"Wispr Flow\".")
+            Text("Fluent writes these exactly as listed. It also learns them when you correct a word right after it types, for example \"cooper netties\" to \"Kubernetes\".")
                 .font(.callout).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.bottom, 8)
             List {
                 ForEach(dictionary.entries) { DictionaryRow(entry: $0, onDelete: { dictionary.delete($0) }) }
