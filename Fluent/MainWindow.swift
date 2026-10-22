@@ -378,10 +378,11 @@ private struct DictationPane: View {
                             .onChange(of: cleanup) { dictation.refreshWidgetSettings() }
                     }
                     Divider().inset
-                    SettingRow(title: "Lists", symbol: "list.bullet", detail: "In email and documents (Mail, Gmail, Outlook, Notes, Docs), a spoken list becomes a real list. Chat apps stay one paragraph.") {
+                    SettingRow(title: "Lists", symbol: "list.bullet", detail: "In email and everything else, \"one... two...\" or \"first... second...\" becomes a numbered list, and email gets its greeting and sign-off on their own lines. Never in messages, AI chats or one-line boxes like search.") {
                         Toggle("", isOn: $formatLists).toggleStyle(MonoSwitch()).labelsHidden()
                     }
                     Divider().inset
+                    ForEach(AppCategory.allCases) { StyleRow(category: $0) }
                     SettingRow(title: "Open at login", symbol: "power", detail: "Start Fluent when you log in to this Mac.") {
                         Toggle("", isOn: Binding(get: { LoginItem.isOn }, set: { LoginItem.set($0) }))
                             .toggleStyle(MonoSwitch()).labelsHidden()
@@ -396,6 +397,36 @@ private struct DictationPane: View {
                 }
                 .padding(.horizontal, 24)
             }
+        }
+    }
+}
+
+/// One app category's writing style (Wispr Flow's Styles): punctuation and capitals only.
+private struct StyleRow: View {
+    let category: AppCategory
+    @AppStorage private var style: String
+
+    init(category: AppCategory) {
+        self.category = category
+        _style = AppStorage(wrappedValue: category.defaultStyle.rawValue, "style.\(category.rawValue)")
+    }
+
+    private var symbol: String {
+        switch category {
+        case .personal: "message.fill"
+        case .work: "briefcase.fill"
+        case .email: "envelope.fill"
+        case .other: "doc.text.fill"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingRow(title: category.title, symbol: symbol,
+                       detail: category.examples + ". " + (WritingStyle(rawValue: style) ?? category.defaultStyle).help) {
+                MonoSegmented(selection: $style, options: category.styles.map { ($0.rawValue, $0.label) })
+            }
+            Divider().inset
         }
     }
 }

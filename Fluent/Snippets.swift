@@ -82,41 +82,15 @@ final class Snippets {
 enum AppStyle: String {
     case document, chat, plain
 
-    static let documentApps: Set<String> = [
-        "com.apple.mail", "com.microsoft.Outlook", "com.apple.Notes", "com.apple.iWork.Pages",
-        "com.microsoft.Word", "com.apple.TextEdit", "md.obsidian", "notion.id", "com.superhuman.electron",
-    ]
-    static let chatApps: Set<String> = [
-        "com.anthropic.claudefordesktop", "com.tinyspeck.slackmacgap", "com.apple.MobileSMS",
-        "net.whatsapp.WhatsApp", "com.hnc.Discord", "ru.keepcoder.Telegram", "com.openai.chat",
-    ]
-    static let documentSites = ["Gmail", "Google Docs", "Outlook", "Notion", "Google Keep", "Superhuman"]
-    static let chatSites = ["Slack", "ChatGPT", "Claude", "WhatsApp", "Messenger", "Discord", "Gemini"]
-
-    static let emailApps: Set<String> = [
-        "com.apple.mail", "com.microsoft.Outlook", "com.superhuman.electron", "com.readdle.SparkDesktop",
-        "com.readdle.smartemail-Mac", "com.mimestream.Mimestream",
-    ]
-
-    /// Email gets its own layout (greeting and sign-off on their own lines).
-    static func isEmail(bundleID: String?, appName: String? = nil, windowTitle: String?) -> Bool {
-        if let id = bundleID, emailApps.contains(id) { return true }
-        // Web apps installed from Chrome are named after the site ("Gmail"), and their window title
-        // can't always be read.
-        let title = (windowTitle ?? "") + " " + (appName ?? "")
-        return ["Gmail", "Outlook", "Superhuman"].contains { title.localizedCaseInsensitiveContains($0) }
+    /// From the app category: personal and work messages and AI chats stay one paragraph (chat);
+    /// email and everything else may get lists (document).
+    static func detect(bundleID: String?, appName: String?, windowTitle: String?) -> AppStyle {
+        let (category, ai) = AppCategory.detect(bundleID: bundleID, appName: appName, windowTitle: windowTitle)
+        return ai || category == .personal || category == .work ? .chat : .document
     }
 
-    /// Uses the app, and for browsers and web apps the window title (which names the site).
-    static func detect(bundleID: String?, appName: String?, windowTitle: String?) -> AppStyle {
-        if let id = bundleID {
-            if documentApps.contains(id) { return .document }
-            if chatApps.contains(id) { return .chat }
-        }
-        let title = (windowTitle ?? "") + " " + (appName ?? "")
-        if documentSites.contains(where: { title.localizedCaseInsensitiveContains($0) }) { return .document }
-        if chatSites.contains(where: { title.localizedCaseInsensitiveContains($0) }) { return .chat }
-        return .plain
+    static func isEmail(bundleID: String?, appName: String? = nil, windowTitle: String?) -> Bool {
+        AppCategory.detect(bundleID: bundleID, appName: appName, windowTitle: windowTitle).0 == .email
     }
 
     /// Title of the app's focused window, off the main thread.

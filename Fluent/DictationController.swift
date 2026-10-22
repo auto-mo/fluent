@@ -179,6 +179,7 @@ final class DictationController {
     }
 
     func setLanguage(_ newLanguage: Language) {
+        guard newLanguage != language else { return }   // picking the current language keeps the chosen model
         setModel(newLanguage == .english ? ModelCatalog.english : ModelCatalog.multilingual)
     }
 
@@ -360,7 +361,7 @@ final class DictationController {
             let samples = try AudioConverter().resampleAudioFile(path: url.path)
             raw = try await model.transcribe(samples)
         }
-        let fixed = ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw)))))
+        let fixed = UnitNumbers.normalize(ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw))))))
         return dictionary.apply(to: fixed, app: nil).0
     }
 
@@ -486,7 +487,7 @@ final class DictationController {
                 let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
                 let before: String? = if let pid { await Task.detached { CaretContext.textBefore(pid: pid) }.value } else { nil }
                 let literal = Cleaner.literalApps.contains(front?.bundleIdentifier ?? "")
-                let digitsFixed = literal ? raw : ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw)))))
+                let digitsFixed = literal ? raw : UnitNumbers.normalize(ClockTimes.normalize(Temperatures.normalize(SpokenDigits.normalize(SentenceCorrections.apply(Fillers.remove(raw))))))
                 // Your names first, so cleanup sees them right; again after, in case it changed one.
                 let named = dictionary.apply(to: digitsFixed, app: app).0
                 // Chat stays one paragraph; elsewhere spoken sequences become lists, and email gets its layout.
@@ -503,7 +504,10 @@ final class DictationController {
                     : TextShape.apply(cleaned.text, longForm: longForm && formatting, lists: true,
                                       email: AppStyle.isEmail(bundleID: front?.bundleIdentifier, appName: app, windowTitle: title),
                                       atStart: (before ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                let final = snippets.expand(dictionary.apply(to: shaped, app: app).0)
+                // The writing style for this kind of app (Formal, Casual...): punctuation and capitals only.
+                let category = AppCategory.detect(bundleID: front?.bundleIdentifier, appName: app, windowTitle: title).0
+                let styled = literal ? shaped : category.style.apply(shaped)
+                let final = snippets.expand(dictionary.apply(to: styled, app: app).0)
                 // Is there somewhere to type? If definitely not, hold the text until you click into a box.
                 let target = NSWorkspace.shared.frontmostApplication
                 let isSelf = target?.processIdentifier == ProcessInfo.processInfo.processIdentifier

@@ -454,7 +454,7 @@ enum SpokenNumbers {
     }
 
     /// Ordinary reading: "three thousand four hundred fifty" = 3450.
-    private static func standard(_ words: [String]) -> Int? {
+    static func standard(_ words: [String]) -> Int? {
         var total = 0, current = 0
         for w in words {
             if let u = units[w] { current += u }
@@ -556,6 +556,34 @@ enum SentenceCorrections {
             let start = out.index(out.startIndex, offsetBy: text.distance(from: text.startIndex, to: all.lowerBound))
             let end = out.index(start, offsetBy: text.distance(from: all.lowerBound, to: all.upperBound))
             out.replaceSubrange(start..<end, with: fixed + text[punctR])
+        }
+        return out
+    }
+}
+
+/// A spoken number before a unit becomes digits: "twenty-four hours" is "24 hours", "fifteen percent"
+/// is "15 percent". Counts of time under ten stay as words ("two days", "one hour"), as in normal
+/// writing; money, percentages and measurements always take digits.
+enum UnitNumbers {
+    private static let numberWord = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million"
+    private static let timeUnits = "hours?|minutes?|seconds?|days?|weeks?|months?|years?|times|people|items|pages|steps|words|calls|emails|meetings"
+    private static let measureUnits = "percent|dollars?|bucks|cents?|euros?|pounds?|miles?|kilometers?|kilometres?|km|meters?|metres?|feet|inches|kilos?|kg|grams?|gb|mb|degrees?"
+    private static let re = try! NSRegularExpression(pattern:
+        #"(?i)\b((?:(?:\#(numberWord))(?:[\s-]+(?:and[\s-]+)?))*(?:\#(numberWord)))[\s-]+(\#(timeUnits)|\#(measureUnits))\b"#)
+    private static let measures = try! NSRegularExpression(pattern: #"(?i)^(\#(measureUnits))$"#)
+
+    static func normalize(_ text: String) -> String {
+        var out = text
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let numR = Range(m.range(at: 1), in: text), let unitR = Range(m.range(at: 2), in: text) else { continue }
+            let words = text[numR].lowercased().split(whereSeparator: { $0 == " " || $0 == "-" }).map(String.init).filter { $0 != "and" }
+            guard let value = SpokenNumbers.standard(words) else { continue }
+            let unit = String(text[unitR])
+            let isMeasure = measures.firstMatch(in: unit, range: NSRange(unit.startIndex..., in: unit)) != nil
+            guard value >= 10 || isMeasure else { continue }
+            let start = out.index(out.startIndex, offsetBy: text.distance(from: text.startIndex, to: numR.lowerBound))
+            let end = out.index(start, offsetBy: text.distance(from: numR.lowerBound, to: numR.upperBound))
+            out.replaceSubrange(start..<end, with: value >= 1000 ? value.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))) : String(value))
         }
         return out
     }
