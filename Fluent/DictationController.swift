@@ -281,7 +281,7 @@ final class DictationController {
         let state = await Task.detached { FocusProbe.state(pid: pid) }.value
         guard let held else { return }
         let name = front.localizedName ?? "this app"
-        if state == .textBox {
+        if state != .notText {   // a text box, or something that may be one: offer the drop (Return confirms)
             if dropApp != name {
                 dropApp = name
                 hotkey.returnActive = true
