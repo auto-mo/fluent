@@ -2,17 +2,40 @@ import Foundation
 
 /// Layout added after cleanup, by rule rather than by the AI model, so it is instant and can never
 /// drop or change a word: formatting only ever touches layout.
-/// - "new line" / "new paragraph" said at a pause: line breaks, in every app.
+/// - Anywhere: your own name in a sign-off is spelled right ("Thanks. Jon." to "John").
+/// Only in a long-form box (never a search box or one-line field):
+/// - "new line" / "new paragraph" said at a pause: line breaks.
 /// - Spoken sequences ("one, ... two, ..." or "first, ... second, ..."): a numbered list.
 /// - Email: the greeting and your sign-off on their own lines.
 enum TextShape {
-    static func apply(_ text: String, lists: Bool, email: Bool, atStart: Bool) -> String {
+    static func apply(_ text: String, longForm: Bool, lists: Bool, email: Bool, atStart: Bool) -> String {
+        guard longForm else { return signOffName(text) }
         var t = spokenBreaks(text)
         // The sign-off comes off first, so it never ends up inside the last list item.
-        if email { t = signOff(t) }
+        if email { t = signOff(t) } else { t = signOffName(t) }
         if lists { t = numberedList(t) }
         if email, atStart { t = greeting(t) }
         return t
+    }
+
+    /// Where a sentence ends: "?" "!" a line break, or a "." followed by the end or a new sentence.
+    /// "p.m. short day" and "e.g. this" carry on.
+    private static func sentenceEnd(in text: String, from start: String.Index) -> String.Index? {
+        var i = start
+        while i < text.endIndex {
+            let c = text[i]
+            if "?!\n".contains(c) { return i }
+            if c == "." {
+                let next = text.index(after: i)
+                if next == text.endIndex { return i }
+                let after = text[next...]
+                if after.first!.isLetter || after.first!.isNumber { i = next; continue }        // "p.m", "3.5"
+                if let word = after.drop(while: { $0 == " " }).first, word.isLowercase { i = next; continue }
+                return i
+            }
+            i = text.index(after: i)
+        }
+        return nil
     }
 
     // MARK: Spoken line breaks
@@ -37,6 +60,11 @@ enum TextShape {
     private static let cueRe = try! NSRegularExpression(pattern:
         #"(?i)(^|[.?!,;:]\s+(?:and\s+|or\s+)?|\n)(one|two|three|four|five|six|seven|eight|nine|ten|10|[1-9]|first(?:ly)?|second(?:ly)?|third(?:ly)?|fourth|fifth|sixth|seventh|eighth|ninth|tenth|finally|lastly)\s*[,:.)]\s+"#)
 
+    /// "... meet me and third are you going ..." (no comma after the ordinal): only "and" plus an
+    /// ordinal from second on, and it only counts when it continues a run, so "the third time" is safe.
+    private static let andCueRe = try! NSRegularExpression(pattern:
+        #"(?i)(\s+and\s+)(second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|finally|lastly)\s+(?=\p{L})"#)
+
     private struct Cue { let wordStart: String.Index; let itemStart: String.Index; let n: Int; let family: Int }
 
     /// Two or more items introduced in order ("One, ... Two, ..."), each with real words, become
@@ -44,7 +72,8 @@ enum TextShape {
     /// stays after the list. Only the first such run is formatted.
     static func numberedList(_ text: String) -> String {
         let ns = NSRange(text.startIndex..., in: text)
-        let cues: [Cue] = cueRe.matches(in: text, range: ns).compactMap { m in
+        let matches = (cueRe.matches(in: text, range: ns) + andCueRe.matches(in: text, range: ns)).sorted { $0.range.location < $1.range.location }
+        let cues: [Cue] = matches.compactMap { m in
             guard let wordR = Range(m.range(at: 2), in: text), let all = Range(m.range, in: text) else { return nil }
             var word = text[wordR].lowercased()
             if word.hasSuffix("ly"), word != "lastly" { word = String(word.dropLast(2)) }
@@ -85,7 +114,7 @@ enum TextShape {
         for (i, c) in run.enumerated() {
             let end: String.Index
             if i + 1 < run.count { end = run[i + 1].wordStart }
-            else if let stop = text[c.itemStart...].firstIndex(where: { ".?!\n".contains($0) }) { end = text.index(after: stop) }
+            else if let stop = sentenceEnd(in: text, from: c.itemStart) { end = text.index(after: stop) }
             else { end = text.endIndex }
             items.append(String(text[c.itemStart..<end]))
         }
@@ -99,7 +128,7 @@ enum TextShape {
         if intro.hasSuffix(",") || intro.hasSuffix(";") { intro = String(intro.dropLast()) + ":" }
         let lastEnd: String.Index = {
             let c = run.last!
-            if let stop = text[c.itemStart...].firstIndex(where: { ".?!\n".contains($0) }) { return text.index(after: stop) }
+            if let stop = sentenceEnd(in: text, from: c.itemStart) { return text.index(after: stop) }
             return text.endIndex
         }()
         var outro = String(text[lastEnd...]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,13 +189,29 @@ enum TextShape {
     /// lines. Only your name counts, so "Thanks Paul" at the end of a message is left as a sentence. A
     /// near miss from the speech model ("Jon" for "John") counts and is written correctly.
     static func signOff(_ text: String, fullName: String = NSFullUserName()) -> String {
+        guard let s = findSignOff(text, fullName: fullName) else { return text }
+        var body = String(text[..<s.all.lowerBound]) + String(text[s.lead]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.hasSuffix(",") { body = String(body.dropLast()) + "." }   // "..., let me know, thanks, Sam."
+        let sign = capitaliseFirst(String(text[s.word])) + ",\n" + s.name
+        return body.isEmpty ? sign : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sign
+    }
+
+    /// Same sign-off, layout untouched: only the name is spelled right. For any text box.
+    static func signOffName(_ text: String, fullName: String = NSFullUserName()) -> String {
+        guard let s = findSignOff(text, fullName: fullName), String(text[s.nameRange]) != s.name else { return text }
+        return text.replacingCharacters(in: s.nameRange, with: s.name)
+    }
+
+    private struct SignOff { let lead: Range<String.Index>; let word: Range<String.Index>; let nameRange: Range<String.Index>; let all: Range<String.Index>; let name: String }
+
+    private static func findSignOff(_ text: String, fullName: String) -> SignOff? {
         let first = fullName.split(separator: " ").first.map(String.init) ?? ""
-        guard !first.isEmpty else { return text }
+        guard !first.isEmpty else { return nil }
         let alts = signOffs.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
         guard let re = try? NSRegularExpression(pattern: #"(?i)(^|[.?!,]\s+|\n)(\#(alts))[,.!]?\s+(\p{L}[\p{L}'-]*(?:\s\p{L}[\p{L}'-]*)?)[.!]?\s*$"#),
               let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let lead = Range(m.range(at: 1), in: text), let word = Range(m.range(at: 2), in: text),
-              let nameR = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { return text }
+              let nameR = Range(m.range(at: 3), in: text), let all = Range(m.range, in: text) else { return nil }
         let said = String(text[nameR])
         func close(_ a: String, _ b: String) -> Bool {
             let x = a.lowercased(), y = b.lowercased()
@@ -180,11 +225,8 @@ enum TextShape {
         let name: String
         if close(said, fullName) { name = fullName }
         else if close(said, first) { name = first }
-        else { return text }
-        var body = String(text[..<all.lowerBound]) + String(text[lead]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if body.hasSuffix(",") { body = String(body.dropLast()) + "." }   // "..., let me know, thanks, Sam."
-        let sign = capitaliseFirst(String(text[word])) + ",\n" + name
-        return body.isEmpty ? sign : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sign
+        else { return nil }
+        return SignOff(lead: lead, word: word, nameRange: nameR, all: all, name: name)
     }
 
     // MARK: Helpers

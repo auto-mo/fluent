@@ -108,8 +108,9 @@ final class EditLearner {
     /// Word-level comparison of what was typed with what's there now. Returns replaced stretches
     /// of 1 to 3 words that look like spelling corrections of a name or term.
     nonisolated static func corrections(from inserted: String, to now: String) -> [Swap] {
-        let a = inserted.split(separator: " ").map(String.init)
-        var b = now.split(separator: " ").map(String.init)
+        // Split on line breaks too, or "\nOn" is taken for a word and learned.
+        let a = inserted.split(whereSeparator: \.isWhitespace).map(String.init)
+        var b = now.split(whereSeparator: \.isWhitespace).map(String.init)
         if b.count > a.count + 6 { b = Array(b.prefix(a.count + 6)) }   // ignore what you typed after it
         func norm(_ w: String) -> String { w.lowercased().trimmingCharacters(in: .punctuationCharacters) }
         let na = a.map(norm), nb = b.map(norm)
@@ -152,7 +153,7 @@ final class EditLearner {
     }
 
     nonisolated static func looksLikeNameCorrection(heard: String, correct: String) -> Bool {
-        guard heard != correct, !correct.isEmpty else { return false }
+        guard heard != correct, !correct.isEmpty, !correct.contains(where: \.isNewline) else { return false }
         if correct.contains(where: \.isNumber) && !correct.contains(where: \.isLetter) { return false }   // a number changed: a fact
         if heard.contains(where: \.isNumber) != correct.contains(where: \.isNumber),
            !correct.contains(where: \.isLetter) { return false }

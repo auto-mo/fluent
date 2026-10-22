@@ -66,6 +66,7 @@ final class WordDictionary {
     @discardableResult
     func learn(heard: String?, correct: String, app: String) -> Entry? {
         let h = heard?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !correct.contains(where: \.isNewline), !correct.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         if let i = entries.firstIndex(where: { $0.term == correct }) {
             if !h.isEmpty, !entries[i].heard.contains(where: { $0.caseInsensitiveCompare(h) == .orderedSame }) { entries[i].heard.append(h) }
             entries[i].count += 1

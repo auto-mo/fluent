@@ -99,9 +99,11 @@ enum AppStyle: String {
     ]
 
     /// Email gets its own layout (greeting and sign-off on their own lines).
-    static func isEmail(bundleID: String?, windowTitle: String?) -> Bool {
+    static func isEmail(bundleID: String?, appName: String? = nil, windowTitle: String?) -> Bool {
         if let id = bundleID, emailApps.contains(id) { return true }
-        let title = windowTitle ?? ""
+        // Web apps installed from Chrome are named after the site ("Gmail"), and their window title
+        // can't always be read.
+        let title = (windowTitle ?? "") + " " + (appName ?? "")
         return ["Gmail", "Outlook", "Superhuman"].contains { title.localizedCaseInsensitiveContains($0) }
     }
 

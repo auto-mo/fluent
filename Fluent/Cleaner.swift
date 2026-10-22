@@ -516,7 +516,7 @@ enum Fillers {
 /// The AI cleanup misses this shape, and a rule can't change anything else.
 enum SentenceCorrections {
     private static let re = try! NSRegularExpression(pattern:
-        #"(?i)\b([\p{L}\d:']+)([.?!])\s+(?:sorry|no wait|wait|actually|i mean|no)\s*,?\s+([^.?!\n]{1,40}?)([.?!])"#)
+        #"(?i)\b((?:[\p{L}\d]+\s+)?o'clock|[\p{L}\d:']+)([.?!])\s+(?:sorry|no wait|wait|actually|i mean|no)\s*,?\s+((?:[ap]\.m\.|[^.?!\n]){1,50}?)([.?!])"#)
     /// The same inside a sentence: "make it to Thursday sorry, Friday's call" keeps only "Friday's".
     private static let inline = try! NSRegularExpression(pattern:
         #"(?i)\b([\p{L}\d:']+),?\s+(?:sorry|no wait|wait|i mean)\s*,?\s+([\p{L}\d:'’]+)"#)
@@ -526,6 +526,7 @@ enum SentenceCorrections {
 
     private static func kind(_ word: String) -> Int? {
         let w = word.lowercased().replacingOccurrences(of: "'s", with: "").replacingOccurrences(of: "’s", with: "")
+        if w.hasSuffix("o'clock") { return 2 }   // "three o'clock" is a time
         if days.contains(w) { return 0 }
         if months.contains(w) { return 1 }
         if w.first?.isNumber == true || SpokenNumbers.isNumberWord(w) { return 2 }
@@ -550,7 +551,7 @@ enum SentenceCorrections {
             let replacement = String(text[newR]).trimmingCharacters(in: .whitespaces)
             guard let firstNew = replacement.split(separator: " ").first.map(String.init),
                   let k = kind(String(text[oldR])), kind(firstNew) == k,
-                  replacement.split(separator: " ").count <= 5 else { continue }
+                  replacement.split(separator: " ").count <= 7 else { continue }
             let fixed = (k == 0 || k == 1) ? firstNew.prefix(1).uppercased() + replacement.dropFirst() : replacement
             let start = out.index(out.startIndex, offsetBy: text.distance(from: text.startIndex, to: all.lowerBound))
             let end = out.index(start, offsetBy: text.distance(from: all.lowerBound, to: all.upperBound))
@@ -563,9 +564,21 @@ enum SentenceCorrections {
 /// Clock times the speech model writes with a dot: "at 9.30" → "at 9:30". Only after "at" (or
 /// "by", "from", "until", "till") and only for valid minutes, so "2.4 million" is never touched.
 enum ClockTimes {
+    /// "V two", "M four": not "A" or "I", which start ordinary sentences.
+    private static let letterNumbers = try! NSRegularExpression(pattern: #"\b([B-HJ-Z])\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b"#)
+    private static let oclock = try! NSRegularExpression(pattern: #"(?i)\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+o'clock\b"#)
+    private static let hours = ["one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+                                "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12"]
     private static let re = try! NSRegularExpression(pattern: #"(?i)\b(at|by|from|until|till|to) (1[0-2]|0?[1-9])\.([0-5][0-9])\b(?!\s*(?:million|billion|thousand|percent|%|k\b))"#)
     static func normalize(_ text: String) -> String {
-        re.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1 $2:$3")
+        // "three o'clock" is written "3 o'clock"; a capital letter and a number is a name ("V two" is "V2").
+        var text = letterNumbers.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1\u{2}$2")
+        for (word, digit) in hours { text = text.replacingOccurrences(of: "\u{2}" + word, with: digit, options: .caseInsensitive) }
+        for m in oclock.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let w = Range(m.range(at: 1), in: text), let d = hours[text[w].lowercased()] else { continue }
+            text.replaceSubrange(w, with: d)
+        }
+        return re.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1 $2:$3")
     }
 }
 

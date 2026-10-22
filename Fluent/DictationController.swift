@@ -495,11 +495,14 @@ final class DictationController {
                 let cleaned = cleanupOn
                     ? await cleaner.clean(named, before: before, appBundleID: front?.bundleIdentifier, terms: dictionary.hintTerms, style: style)
                     : Cleaner.Output(text: named, cleaned: false, seconds: 0)
-                let formatting = (UserDefaults.standard.object(forKey: "formatLists") as? Bool ?? true) && !literal && style != .chat
-                let shaped = formatting
-                    ? TextShape.apply(cleaned.text, lists: true, email: AppStyle.isEmail(bundleID: front?.bundleIdentifier, windowTitle: title),
+                // Words are fixed everywhere; layout (lists, email lines, line breaks) only in a long-form box.
+                let role: String? = if let pid { await Task.detached { FocusProbe.role(pid: pid) }.value } else { nil }
+                let longForm = !literal && !FocusProbe.singleLineRoles.contains(role ?? "")
+                let formatting = (UserDefaults.standard.object(forKey: "formatLists") as? Bool ?? true) && style != .chat
+                let shaped = literal ? cleaned.text
+                    : TextShape.apply(cleaned.text, longForm: longForm && formatting, lists: true,
+                                      email: AppStyle.isEmail(bundleID: front?.bundleIdentifier, appName: app, windowTitle: title),
                                       atStart: (before ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    : cleaned.text
                 let final = snippets.expand(dictionary.apply(to: shaped, app: app).0)
                 // Is there somewhere to type? If definitely not, hold the text until you click into a box.
                 let target = NSWorkspace.shared.frontmostApplication

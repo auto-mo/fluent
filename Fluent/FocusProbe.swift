@@ -18,6 +18,21 @@ enum FocusProbe {
         return AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute as CFString, &focused) == .noValue
     }
 
+    /// The focused element's role ("AXTextArea", "AXTextField"...), or nil when the app doesn't say.
+    static func role(pid: pid_t) -> String? {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let ref = focused, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
+        var roleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(ref as! AXUIElement, kAXRoleAttribute as CFString, &roleRef)
+        return roleRef as? String
+    }
+
+    /// One-line boxes (search, address and plain fields) never get line breaks or lists.
+    static let singleLineRoles: Set<String> = [kAXTextFieldRole, "AXSearchField", kAXComboBoxRole]
+
     /// `.unknown` when the app doesn't answer; callers treat that like a text box, so apps that hide
     /// their text boxes from Accessibility still get the text.
     static func state(pid: pid_t) -> State {
