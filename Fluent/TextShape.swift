@@ -62,7 +62,8 @@ enum TextShape {
             for c in cues {
                 if run.isEmpty { if c.n == start { run = [c] }; continue }
                 let last = run.last!
-                if c.family == last.family, c.n == last.n + 1 || (c.n == -1 && c.family == 1) { run.append(c); if c.n == -1 { break } }
+                // People mix the two ("one... second... and third..."), so the kind of word doesn't matter.
+                if c.n == last.n + 1 || (c.n == -1 && last.n >= 1) { run.append(c); if c.n == -1 { break } }
                 else if run.count >= 2 { break }
                 else { run = c.n == start ? [c] : [] }
             }
