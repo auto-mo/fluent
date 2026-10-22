@@ -681,16 +681,17 @@ private struct DictionaryPane: View {
         VStack(alignment: .leading, spacing: 0) {
             PaneHeader(title: "Dictionary") {
                 HStack(spacing: 8) {
-                    TextField("Add a name or word", text: $newWord)
-                        .textFieldStyle(.roundedBorder).frame(width: 220)
+                    TextField("Add a word, or Word = how it's heard", text: $newWord)
+                        .textFieldStyle(.roundedBorder).frame(width: 260)
+                        .help("For example: Kubernetes = cooper netties, kuber netties")
                         .onSubmit(add)
                     Button("Add", action: add).buttonStyle(PrimaryButtonStyle()).disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            Text("Fluent writes these exactly as listed. It also learns them when you correct a word right after it types, for example \"cooper netties\" to \"Kubernetes\".")
+            Text("Fluent writes these exactly as listed, and fixes the other ways the speech model hears them. Add those with + on a word, or as \"Kubernetes = cooper netties\". It also learns them when you correct a word right after it types.")
                 .font(.callout).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.bottom, 8)
             List {
-                ForEach(dictionary.entries) { DictionaryRow(entry: $0, onDelete: { dictionary.delete($0) }) }
+                ForEach(dictionary.entries) { DictionaryRow(entry: $0, dictionary: dictionary) }
                 SwiftUI.Section {
                     Toggle(isOn: $useCommon) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -719,24 +720,41 @@ private struct DictionaryPane: View {
         return "Updated " + d.formatted(.relative(presentation: .named)) + "."
     }
 
+    /// "Kubernetes" adds the word; "Kubernetes = cooper netties, kuber netties" adds how it's heard too.
     private func add() {
-        dictionary.add(newWord)
+        let parts = newWord.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+        let heard = parts.count > 1 ? parts[1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } : []
+        dictionary.add(parts.first ?? "", heard: heard)
         newWord = ""
     }
 }
 
 private struct DictionaryRow: View {
     let entry: WordDictionary.Entry
-    let onDelete: (WordDictionary.Entry) -> Void
+    let dictionary: WordDictionary
     @State private var hovering = false
+    @State private var adding = false
+    @State private var newHeard = ""
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(entry.term).fontWeight(.medium)
-                if !entry.heard.isEmpty {
-                    Text("Also catches: " + entry.heard.joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if !entry.heard.isEmpty || adding {
+                    HStack(spacing: 5) {
+                        Text("Also catches").font(.caption).foregroundStyle(.secondary)
+                        ForEach(entry.heard, id: \.self) { h in HeardChip(text: h) { dictionary.removeHeard(h, from: entry.id) } }
+                        if adding {
+                            TextField("how it's heard", text: $newHeard)
+                                .textFieldStyle(.plain).font(.caption).frame(width: 140)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(Capsule().strokeBorder(Color.primary.opacity(0.25)))
+                                .focused($fieldFocused)
+                                .onSubmit(commit)
+                                .onExitCommand { adding = false; newHeard = "" }
+                        }
+                    }
                 }
             }
             Spacer()
@@ -748,13 +766,45 @@ private struct DictionaryRow: View {
             Text(entry.source == .yours ? "Yours" : entry.source == .learned ? "Learned" : "Starter")
                 .font(.caption2.weight(.medium)).padding(.horizontal, 7).padding(.vertical, 2)
                 .background(Capsule().fill(Color.primary.opacity(0.07)))
-            RowButton(symbol: "trash", help: "Remove") { onDelete(entry) }.opacity(hovering ? 1 : 0)
+            HStack(spacing: 2) {
+                RowButton(symbol: "plus", help: "Add another way it's heard") { adding = true; fieldFocused = true }
+                RowButton(symbol: "trash", help: "Remove") { dictionary.delete(entry) }
+            }
+            .opacity(hovering || adding ? 1 : 0)
         }
         .padding(.vertical, 5).padding(.horizontal, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.05 : 0)))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension DictionaryRow {
+    private func commit() {
+        dictionary.addHeard(newHeard, to: entry.id)
+        newHeard = ""
+        fieldFocused = true   // ready for the next one; Esc closes
+    }
+}
+
+/// One "also catches" spelling, with a remove button on hover.
+private struct HeardChip: View {
+    let text: String
+    let onRemove: () -> Void
+    @State private var hovering = false
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(text).font(.caption)
+            if hovering {
+                Button(action: onRemove) { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
+                    .buttonStyle(.plain).help("Remove").accessibilityLabel("Remove \(text)")
+            }
+        }
+        .padding(.horizontal, 7).padding(.vertical, 2)
+        .background(Capsule().fill(Color.primary.opacity(hovering ? 0.12 : 0.07)))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
     }
 }
 

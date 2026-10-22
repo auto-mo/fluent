@@ -57,6 +57,22 @@ final class WordDictionary {
         save()
     }
 
+    /// Another way the speech model writes this word ("cooper netties" for "Kubernetes").
+    func addHeard(_ heard: String, to id: UUID) {
+        let h = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty, !h.contains(where: \.isNewline), let i = entries.firstIndex(where: { $0.id == id }),
+              !entries[i].heard.contains(where: { $0.caseInsensitiveCompare(h) == .orderedSame }),
+              h.caseInsensitiveCompare(entries[i].term) != .orderedSame else { return }
+        entries[i].heard.append(h)
+        save()
+    }
+
+    func removeHeard(_ heard: String, from id: UUID) {
+        guard let i = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[i].heard.removeAll { $0 == heard }
+        save()
+    }
+
     func delete(_ entry: Entry) {
         entries.removeAll { $0.id == entry.id }
         save()
