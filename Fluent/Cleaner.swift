@@ -110,7 +110,8 @@ final class Cleaner {
         guard !out.isEmpty, !out.contains("\n") || raw.contains("\n") else { return false }
         let a = wordCount(raw), b = wordCount(out)
         guard b > 0, Double(b) <= Double(a) * 1.15 + 2, Double(b) >= Double(a) * 0.5 else { return false }
-        guard digitsAreFaithful(out, to: raw), numbersKept(out, from: raw), wordsKept(out, from: raw) else { return false }
+        guard digitsAreFaithful(out, to: raw), numbersKept(out, from: raw), wordsKept(out, from: raw),
+              deletionsAllowed(out, from: raw) else { return false }
         // Contractions stay as said: "I'm" never becomes "I am".
         let outLower = out.lowercased().replacingOccurrences(of: "’", with: "'")
         for word in letterWords(raw.replacingOccurrences(of: "’", with: "'")) where word.contains("'") && word.count > 2 {
@@ -174,6 +175,42 @@ final class Cleaner {
         for word in letterWords(lower) where !outSet.contains(word) {
             if droppableWords.contains(word) || numberWords.contains(word) || rewrittenWords.contains(word) { continue }
             if word.count >= 3, outWords.contains(where: { $0.count >= 2 && editDistance($0, word) <= 2 }) { continue }
+            return false
+        }
+        return true
+    }
+
+    /// Compares the words in order. A stretch the model removed must be fillers, an exact repeat
+    /// of what follows ("to to", "I went, I went"), or come with a spoken correction ("no wait",
+    /// "sorry", "actually"). "I spoke to Ileana, I spoke to Mariam" is none of these: the speaker
+    /// spoke to both, so a version without the first clause is rejected.
+    static func deletionsAllowed(_ out: String, from raw: String) -> Bool {
+        let a = letterWords(raw), b = letterWords(out)
+        guard !a.isEmpty else { return true }
+        var lcs = Array(repeating: Array(repeating: 0, count: b.count + 1), count: a.count + 1)
+        for i in stride(from: a.count - 1, through: 0, by: -1) {
+            for j in stride(from: b.count - 1, through: 0, by: -1) {
+                lcs[i][j] = a[i] == b[j] ? lcs[i + 1][j + 1] + 1 : max(lcs[i + 1][j], lcs[i][j + 1])
+            }
+        }
+        // Walk the alignment; each hunk is (removed words, how many words were added in their place).
+        var hunks: [(start: Int, removed: [String], added: Int)] = []
+        var i = 0, j = 0, start = 0, removed: [String] = [], added = 0
+        func flush() { if !removed.isEmpty { hunks.append((start, removed, added)) }; removed = []; added = 0 }
+        while i < a.count || j < b.count {
+            if i < a.count, j < b.count, a[i] == b[j] { flush(); i += 1; j += 1 }
+            else if j < b.count, i == a.count || lcs[i][j + 1] >= lcs[i + 1][j] { added += 1; j += 1 }
+            else { if removed.isEmpty { start = i }; removed.append(a[i]); i += 1 }
+        }
+        flush()
+        let cues = correctionCues.map { $0.trimmingCharacters(in: .punctuationCharacters) }
+        for h in hunks {
+            let content = h.removed.filter { !droppableWords.contains($0) && !numberWords.contains($0) && !rewrittenWords.contains($0) }
+            guard content.count - h.added >= 2 else { continue }   // a rewrite in place, or a word or two
+            let end = h.start + h.removed.count
+            if Array(a[end..<min(a.count, end + h.removed.count)]) == h.removed { continue }   // a repeat
+            let near = a[h.start..<min(a.count, end + 3)].joined(separator: " ")
+            if cues.contains(where: { near.contains($0) }) { continue }   // a spoken correction
             return false
         }
         return true

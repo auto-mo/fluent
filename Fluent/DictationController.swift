@@ -111,6 +111,7 @@ final class DictationController {
             drop: { [weak self] in self?.dropHeld() },
             undo: { [weak self] in self?.undoLast() },
             copyHeld: { [weak self] in self?.copyHeld() },
+            pasteHeld: { [weak self] in self?.dropHeld() },
             discardHeld: { [weak self] in self?.discardHeld() },
             toggleCleanup: { [weak self] in
                 guard let self else { return }

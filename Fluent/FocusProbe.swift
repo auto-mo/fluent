@@ -56,6 +56,8 @@ enum FocusProbe {
         // Hold only when the focus is plainly not somewhere to type. Anything else (a group, a scroll
         // area, a custom view) may be a text box the app describes badly: WhatsApp reports its search
         // field that way, so the text is typed rather than held.
+        // The Finder and the desktop: pasting there makes a text clipping file, so hold instead.
+        if NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.apple.finder" { return .notText }
         return notTextRoles.contains(role) ? .notText : .unknown
     }
 

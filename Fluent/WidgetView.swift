@@ -24,6 +24,7 @@ final class WidgetModel {
         var drop: () -> Void = {}
         var undo: () -> Void = {}
         var copyHeld: () -> Void = {}
+        var pasteHeld: () -> Void = {}
         var discardHeld: () -> Void = {}
         var toggleCleanup: () -> Void = {}
         var toggleLanguage: () -> Void = {}
@@ -103,6 +104,7 @@ struct WidgetView: View {
                     HStack(spacing: 6) {
                         Text("Click a text box").font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
                         Spacer()
+                        PillButton(symbol: "arrow.down.doc", help: "Paste anyway, where you are now (on the desktop it makes a text file)") { model.actions.pasteHeld() }
                         PillButton(symbol: "doc.on.doc", help: "Copy") { model.actions.copyHeld() }
                         PillButton(symbol: "trash", help: "Discard (Esc)") { model.actions.discardHeld() }
                     }
